@@ -67,6 +67,7 @@ export default function TradesScreen({ navigation }) {
         backgroundColor={theme.primary}
         title="My Trades"
         subtitle="Track your active & history trades"
+        showBackButton={false}
       />
 
       {/* Tabs */}

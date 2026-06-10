@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import React, { useMemo } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -36,14 +36,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
  *  4. Landscape tablet where content shouldn't hug the notch sides:
  *       <SafeScreen> ...content </SafeScreen>  ← keep left/right true (default)
  */
-export function SafeScreen({
+const SafeScreen = ({
   children,
   style,
   top = true,
   bottom = true,
   left = true,
   right = true,
-}) {
+}) => {
   const insets = useSafeAreaInsets();
 
   const insetStyle = useMemo(
@@ -57,7 +57,10 @@ export function SafeScreen({
   );
 
   return <View style={[styles.container, insetStyle, style]}>{children}</View>;
-}
+};
+
+export { SafeScreen };
+export default SafeScreen;
 
 const styles = StyleSheet.create({
   container: { flex: 1 },

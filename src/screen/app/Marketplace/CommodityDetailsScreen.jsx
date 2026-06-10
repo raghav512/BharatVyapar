@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useSelector } from 'react-redux';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SafeScreen } from '../../../components/SafeScreen';
 import AppHeader from '../../../components/AppHeader';
 import COLORS from '../../../constant/colors';
@@ -29,6 +30,7 @@ export default function CommodityDetailsScreen({ route, navigation }) {
   const { user, selectedRole: stateRole } = useSelector(state => state.auth);
   const selectedRole = stateRole || user?.role || 'FPO';
   const theme = ROLE_THEMES[selectedRole] || ROLE_THEMES.FPO;
+  const insets = useSafeAreaInsets();
 
   // Mock listing details (can be passed via route or defaulted)
   const item = route?.params?.item || {
@@ -296,11 +298,11 @@ export default function CommodityDetailsScreen({ route, navigation }) {
         </View>
 
         {/* Bottom Spacing */}
-        <View style={{ height: h(80) }} />
+        <View style={{ height: h(90) + insets.bottom }} />
       </ScrollView>
 
       {/* Floating Action Sticky Footer */}
-      <View style={styles.stickyFooter}>
+      <View style={[styles.stickyFooter, { paddingBottom: insets.bottom + h(14) }]}>
         {viewAsOwner ? (
           <TouchableOpacity
             style={[styles.primaryActionBtn, { backgroundColor: theme.primary }]}
@@ -380,7 +382,7 @@ export default function CommodityDetailsScreen({ route, navigation }) {
                 ))}
               </View>
 
-              {/* Payment timeline Preference */}
+              {/* Proposed Payment timeline Preference */}
               <Text style={styles.inputLabel}>Proposed Payment Timeline</Text>
               <TextInput
                 style={styles.modalInput}

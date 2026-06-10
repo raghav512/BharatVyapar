@@ -68,6 +68,9 @@ api.interceptors.response.use(
     const original = error.config || {};
     const statusCode = error.response?.status;
 
+    // Let abort/cancel errors pass through untouched
+    if (axios.isCancel(error)) return Promise.reject(error);
+
     if (__DEV__) {
       console.log('[NET][RES][ERR]', {
         statusCode,

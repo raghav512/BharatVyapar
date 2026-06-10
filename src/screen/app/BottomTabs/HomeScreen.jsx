@@ -119,6 +119,7 @@ export default function HomeScreen({ navigation }) {
         paddingTop={topInset + h(10)}
         title="Bharat FPO Vyapar"
         subtitle={`${selectedRole} Dashboard`}
+        showBackButton={false}
       />
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>

@@ -1,38 +1,62 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import COLORS from '../constant/colors';
 import { w, h, f } from '../utils/responsive';
 
 const AppHeader = ({
   backgroundColor,
-  paddingTop,
   title,
   subtitle,
   children,
-  showBackButton,
+  showBackButton = true,
   onBackPress,
 }) => {
+  const insets = useSafeAreaInsets();
+  const navigation = useNavigation();
+
+  // Handle back press gracefully
+  const handleBackPress = () => {
+    if (onBackPress) {
+      onBackPress();
+    } else if (navigation.canGoBack()) {
+      navigation.goBack();
+    }
+  };
+
+  const shouldShowBack = showBackButton;
+
   return (
-    <View style={[styles.header, { backgroundColor, paddingTop }]}>
+    <View style={[styles.header, { backgroundColor, paddingTop: insets.top }]}>
       <View style={styles.headerTopRow}>
-        {showBackButton && (
-          <TouchableOpacity onPress={onBackPress} style={styles.backButton} activeOpacity={0.7}>
+        {shouldShowBack && (
+          <TouchableOpacity
+            onPress={handleBackPress}
+            style={styles.backButton}
+            activeOpacity={0.7}
+          >
             <Icon name="arrow-left" size={24} color={COLORS.white} />
           </TouchableOpacity>
         )}
-        {title && (
-          <Text 
-            style={[
-              styles.title, 
-              showBackButton && { textAlign: 'left', marginLeft: w(8) }
-            ]}
-          >
-            {title}
-          </Text>
-        )}
+        <View style={styles.textContainer}>
+          {title && (
+            <Text style={styles.title} numberOfLines={1} ellipsizeMode="tail">
+              {title}
+            </Text>
+          )}
+          {subtitle && (
+            <Text
+              style={styles.subtitle}
+              numberOfLines={2}
+              ellipsizeMode="tail"
+            >
+              {subtitle}
+            </Text>
+          )}
+        </View>
       </View>
-      {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
       {children}
     </View>
   );
@@ -50,24 +74,34 @@ const styles = StyleSheet.create({
   headerTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     marginTop: h(10),
+    position: 'relative',
+    minHeight: h(32),
   },
   backButton: {
+    position: 'absolute',
+    left: 0,
+    zIndex: 10,
     padding: w(4),
+  },
+  textContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: w(32),
   },
   title: {
     fontSize: f(16),
     color: COLORS.white,
     opacity: 0.9,
     textAlign: 'center',
-    flex: 1,
   },
   subtitle: {
-    fontSize: f(26),
+    fontSize: f(16),
     fontWeight: '800',
     color: COLORS.white,
-    marginTop: h(8),
+    marginTop: h(4),
     textAlign: 'center',
   },
 });
-

@@ -1,10 +1,12 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
+import axios from 'axios';
 import {
   saveAuthSession,
   getStoredAuthSession,
   removeAuthSession,
 } from '../service/auth/authStorage';
 import authApi from '../service/auth/authApi';
+import userApi from '../service/user/userApi';
 import COLORS from '../constant/colors';
 
 // THUNK: App start pe disk check
@@ -69,14 +71,83 @@ export const verifyOtp = createAsyncThunk(
   },
 );
 
+export const getUserDetails = createAsyncThunk(
+  'auth/getUserDetails',
+  async (_, { rejectWithValue }) => {
+    try {
+      console.log('📥 [GET USER] Fetching user details...');
+      const response = await userApi.getUserDetails();
+      const user = response?.data?.user || response?.data || null;
+      console.log('✅ [GET USER] Success:', {
+        name: `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || 'N/A',
+        phone: user?.phone || 'N/A',
+        role: user?.role || 'N/A',
+      });
+      return user;
+    } catch (err) {
+      console.error('❌ [GET USER] Failed:', err?.message);
+      return rejectWithValue(err?.message || 'Failed to fetch user details');
+    }
+  },
+);
+
+export const updateProfile = createAsyncThunk(
+  'auth/updateProfile',
+  async ({ formData, clientUpdatedUser }, { rejectWithValue, getState, signal }) => {
+    try {
+      const currentUser = getState().auth.user || {};
+      console.log('📤 [UPDATE PROFILE] Updating profile...');
+      console.log('📝 [UPDATE PROFILE] Current data:', {
+        firstName: currentUser.firstName,
+        lastName: currentUser.lastName,
+        gender: currentUser.gender,
+        emailId: currentUser.emailId,
+      });
+
+      const response = await userApi.updateProfile(formData, signal);
+      console.log('🔍 [UPDATE PROFILE] Backend response:', response);
+      console.log('🔍 [UPDATE PROFILE] Backend response.data:', response?.data);
+
+      const backendUser = response?.data || null;
+      const mergedUser = { ...currentUser, ...backendUser, ...clientUpdatedUser };
+
+      console.log('✅ [UPDATE PROFILE] Updated successfully');
+      console.log('📝 [UPDATE PROFILE] New data:', {
+        firstName: mergedUser.firstName,
+        lastName: mergedUser.lastName,
+        gender: mergedUser.gender,
+        emailId: mergedUser.emailId,
+        village: mergedUser.village,
+        district: mergedUser.district,
+        state: mergedUser.state,
+      });
+
+      return mergedUser;
+    } catch (err) {
+      if (err?.name === 'CanceledError' || err?.name === 'AbortError' || err?.code === 'ERR_CANCELED' || axios.isCancel(err)) {
+        console.log('🚫 [UPDATE PROFILE] Cancelled by user');
+        return rejectWithValue({ cancelled: true });
+      }
+      console.error('❌ [UPDATE PROFILE] Failed:', err?.message);
+      console.error('❌ [UPDATE PROFILE] Full backend error:', JSON.stringify(err?.backendError ?? err, null, 2));
+      return rejectWithValue(err?.message || 'Failed to update profile');
+    }
+  },
+);
+
 export const logoutUser = createAsyncThunk(
   'auth/logoutUser',
   async (_, { rejectWithValue }) => {
     try {
+      console.log('🔄 [LOGOUT] Logging out...');
+      await userApi.logout();
       await removeAuthSession();
+      console.log('✅ [LOGOUT] Logout successful');
       return true;
     } catch (err) {
-      return rejectWithValue('Logout failed. Please try again.');
+      console.warn('⚠️ [LOGOUT] API failed, clearing session anyway');
+      await removeAuthSession();
+      return true;
     }
   },
 );
@@ -89,9 +160,11 @@ const initialState = {
 
   sendOtpLoading: false,
   verifyOtpLoading: false,
+  profileLoading: false,
 
   sendOtpError: null,
   verifyOtpError: null,
+  profileError: null,
 
   isAuthChecked: false,
 };
@@ -113,6 +186,8 @@ const authSlice = createSlice({
       state.verifyOtpLoading = false;
       state.sendOtpError = null;
       state.verifyOtpError = null;
+      state.profileError = null;
+      state.profileLoading = false;
       state.isAuthChecked = true;
     },
   },
@@ -161,6 +236,46 @@ const authSlice = createSlice({
         state.verifyOtpLoading = false;
         state.verifyOtpError = action.payload || 'Verify OTP failed';
       })
+      .addCase(getUserDetails.pending, state => {
+        state.profileLoading = true;
+        state.profileError = null;
+      })
+      .addCase(getUserDetails.fulfilled, (state, action) => {
+        state.profileLoading = false;
+        // Merge with existing user to preserve fields backend doesn't return (e.g. emailId)
+        state.user = { ...(state.user || {}), ...action.payload };
+      })
+      .addCase(getUserDetails.rejected, (state, action) => {
+        state.profileLoading = false;
+        state.profileError = action.payload;
+      })
+      .addCase(updateProfile.pending, state => {
+        state.profileLoading = true;
+        state.profileError = null;
+      })
+      .addCase(updateProfile.fulfilled, (state, action) => {
+        state.profileLoading = false;
+        state.user = action.payload;
+        // Capture from Immer draft synchronously before async call
+        const token       = state.token;
+        const selectedRole = state.selectedRole;
+        const roleColor   = state.roleColor;
+        const updatedUser = action.payload;
+        getStoredAuthSession().then(session => {
+          console.log('💾 [PERSIST USER] Saving session to storage...');
+          return saveAuthSession({
+            token,
+            user: updatedUser,
+            refreshToken: session?.refreshToken ?? null,
+            selectedRole,
+            roleColor,
+          });
+        }).catch(err => console.error('❌ [PERSIST USER] Failed:', err));
+      })
+      .addCase(updateProfile.rejected, (state, action) => {
+        state.profileLoading = false;
+        state.profileError = action.payload;
+      })
       .addCase(logoutUser.fulfilled, state => {
         state.token = null;
         state.user = null;
@@ -168,8 +283,10 @@ const authSlice = createSlice({
         state.roleColor = null;
         state.sendOtpLoading = false;
         state.verifyOtpLoading = false;
+        state.profileLoading = false;
         state.sendOtpError = null;
         state.verifyOtpError = null;
+        state.profileError = null;
         state.isAuthChecked = true;
       })
       .addCase(logoutUser.rejected, state => {
@@ -179,8 +296,10 @@ const authSlice = createSlice({
         state.roleColor = null;
         state.sendOtpLoading = false;
         state.verifyOtpLoading = false;
+        state.profileLoading = false;
         state.sendOtpError = null;
         state.verifyOtpError = null;
+        state.profileError = null;
         state.isAuthChecked = true;
       });
   },

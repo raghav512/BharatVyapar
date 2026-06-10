@@ -87,6 +87,10 @@ export default function WarehouseScreen() {
   const [quantity, setQuantity] = useState('');
   const [duration, setDuration] = useState('');
 
+  const qtyVal = parseFloat(quantity) || 0;
+  const durationVal = parseFloat(duration) || 0;
+  const estimatedCost = qtyVal * durationVal * 120;
+
   const filteredWarehouses = WAREHOUSES.filter(wh => {
     const matchesSearch =
       wh.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -330,7 +334,7 @@ export default function WarehouseScreen() {
                 <View style={styles.calcBox}>
                   <Text style={styles.calcTitle}>Estimated Cost</Text>
                   <Text style={[styles.calcValue, { color: roleColor }]}>
-                    ₹{parseInt(quantity || 0) * parseInt(duration || 0) * 120} / total duration
+                    ₹{estimatedCost.toLocaleString('en-IN')} / total duration
                   </Text>
                   <Text style={styles.calcHint}>*Calculated at base rate of ₹120/MT/month</Text>
                 </View>

@@ -16,6 +16,7 @@ import AppHeader from '../../../components/AppHeader';
 import COLORS from '../../../constant/colors';
 import { w, h, mw, f } from '../../../utils/responsive';
 import { showAlert } from '../../../components/CustomAlertBox';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const ROLE_THEMES = {
   FPO: { primary: COLORS.fpoPrimary, secondary: COLORS.fpoSecondary, light: COLORS.fpoLight, text: COLORS.fpoText },
@@ -64,6 +65,7 @@ export default function NegotiationDetailsScreen({ route, navigation }) {
   const { user, selectedRole: stateRole } = useSelector(state => state.auth);
   const selectedRole = stateRole || user?.role || 'FPO';
   const theme = ROLE_THEMES[selectedRole] || ROLE_THEMES.FPO;
+  const insets = useSafeAreaInsets();
 
   const offer = route?.params?.offer || {
     id: 'OFF-7721',
@@ -280,11 +282,11 @@ export default function NegotiationDetailsScreen({ route, navigation }) {
             );
           })}
         </View>
-        <View style={{ height: h(100) }} />
+        <View style={{ height: h(100) + insets.bottom }} />
       </ScrollView>
 
       {/* Sticky Bottom Actions */}
-      <View style={styles.actionFooter}>
+      <View style={[styles.actionFooter, { paddingBottom: insets.bottom + h(14) }]}>
         {isMyTurn ? (
           <View style={styles.buttonRow}>
             <TouchableOpacity style={[styles.actionBtn, styles.rejectBtn]} onPress={handleReject}>
