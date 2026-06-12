@@ -90,7 +90,10 @@ function mapApiItem(raw) {
   const id = raw._id || raw.id;
   if (!id) return null;
 
-  const sellerId = seller._id || seller.id || null;
+  let sellerIdRaw = seller._id || seller.id;
+  if (!sellerIdRaw && typeof raw.sellerId === 'string') sellerIdRaw = raw.sellerId;
+  if (!sellerIdRaw && typeof raw.seller === 'string') sellerIdRaw = raw.seller;
+  const sellerId = sellerIdRaw ? String(sellerIdRaw) : null;
 
   return {
     id:             String(id),
@@ -260,7 +263,12 @@ function OfferCard({ offer, theme, onPress, onEditPress, onDeletePress, currentU
       {/* Action Buttons Row */}
       {!isExpired && (
         <View style={styles.actionButtonsRow}>
-          {currentUserId && offer.sellerId && currentUserId === offer.sellerId && (
+          {(() => {
+            const safeUserId = currentUserId ? String(currentUserId).trim() : '';
+            const safeSellerId = offer.sellerId ? String(offer.sellerId).trim() : '';
+            const isOwner = Boolean(safeUserId && safeSellerId && safeUserId === safeSellerId);
+            return isOwner;
+          })() && (
             <>
               <TouchableOpacity
                 style={[styles.actionBtn, styles.deleteBtn]}
@@ -479,8 +487,21 @@ export default function MarketplaceScreen({ route, navigation }) {
       showAlert({ type: 'error', title: 'Error', message: 'Could not load listing details. Please try again.' });
       return;
     }
-    navigation.navigate('CommodityDetails', { item: offer._fullItem });
-  }, [navigation]);
+    const fullItem = {
+      ...offer._fullItem,
+      sellerId: offer.sellerId,
+    };
+    const currentUserId = user?._id || user?.id;
+    const safeUserId = currentUserId ? String(currentUserId).trim() : '';
+    const safeSellerId = offer.sellerId ? String(offer.sellerId).trim() : '';
+    const isOwner = Boolean(safeUserId && safeSellerId && safeUserId === safeSellerId);
+    
+    if (isOwner) {
+      navigation.navigate('CommodityDetailsOwner', { item: fullItem });
+    } else {
+      navigation.navigate('CommodityDetails', { item: fullItem });
+    }
+  }, [navigation, user]);
 
   const handleEditPress = useCallback((offer) => {
     if (!offer?._fullItem) return;

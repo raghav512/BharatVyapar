@@ -2,6 +2,31 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const AUTH_SESSION_KEY = '@bharatFpoVyapar/auth_session';
+const LOCAL_PROFILES_KEY = '@bharatFpoVyapar/local_profiles';
+
+export const saveLocalProfile = async (phone, profileData) => {
+  if (!phone) return;
+  try {
+    const raw = await AsyncStorage.getItem(LOCAL_PROFILES_KEY);
+    const profiles = raw ? JSON.parse(raw) : {};
+    profiles[phone] = { ...(profiles[phone] || {}), ...profileData };
+    await AsyncStorage.setItem(LOCAL_PROFILES_KEY, JSON.stringify(profiles));
+  } catch (err) {
+    console.warn('Failed to save local profile', err);
+  }
+};
+
+export const getLocalProfile = async (phone) => {
+  if (!phone) return {};
+  try {
+    const raw = await AsyncStorage.getItem(LOCAL_PROFILES_KEY);
+    const profiles = raw ? JSON.parse(raw) : {};
+    return profiles[phone] || {};
+  } catch (err) {
+    console.warn('Failed to get local profile', err);
+    return {};
+  }
+};
 
 const parseSession = rawSession => {
   if (!rawSession) {

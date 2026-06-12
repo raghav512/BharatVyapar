@@ -29,9 +29,9 @@ const normalizeGender = raw =>
 export const syncUserToDisplayData = user => ({
   firstName:      user?.firstName    || '',
   lastName:       user?.lastName     || '',
-  shopName:       user?.shopName     || '',
+  shopName:       user?.shopName     || user?.shopname || '',
   gender:         normalizeGender(user?.gender),
-  emailId:        user?.emailId      || '',
+  emailId:        user?.emailId      || user?.email || '',
   phone:          user?.phone        || '',
   village:        user?.village      || '',
   district:       user?.district     || '',
@@ -47,9 +47,15 @@ export const buildProfileFormData = modalForm => {
   if (modalForm.firstName) formData.append('firstName', modalForm.firstName);
   if (modalForm.lastName)  formData.append('lastName',  modalForm.lastName);
   const trimmedShopName = (modalForm.shopName || '').trim();
-  if (trimmedShopName)     formData.append('shopName',  trimmedShopName);
+  if (trimmedShopName) {
+    formData.append('shopName',  trimmedShopName);
+    formData.append('shopname',  trimmedShopName);
+  }
   if (modalForm.gender)    formData.append('gender',    normalizeGender(modalForm.gender));
-  if (modalForm.emailId)   formData.append('emailId',   modalForm.emailId);
+  if (modalForm.emailId) {
+    formData.append('emailId',   modalForm.emailId);
+    formData.append('email',     modalForm.emailId);
+  }
   if (modalForm.village)   formData.append('village',   modalForm.village);
   if (modalForm.district)  formData.append('district',  modalForm.district);
   if (modalForm.state)     formData.append('state',     modalForm.state);
@@ -60,8 +66,10 @@ export const buildClientUpdatedUser = modalForm => ({
   firstName: modalForm.firstName,
   lastName:  modalForm.lastName,
   shopName:  modalForm.shopName?.trim(),
+  shopname:  modalForm.shopName?.trim(),
   gender:    normalizeGender(modalForm.gender),
   emailId:   modalForm.emailId,
+  email:     modalForm.emailId,
   village:   modalForm.village,
   district:  modalForm.district,
   state:     modalForm.state,

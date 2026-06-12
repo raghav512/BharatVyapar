@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,9 +6,8 @@ import {
   ScrollView,
   TouchableOpacity,
   TextInput,
-  Image,
   Modal,
-  Switch,
+  ActivityIndicator,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useSelector } from 'react-redux';
@@ -16,8 +15,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SafeScreen } from '../../../components/SafeScreen';
 import AppHeader from '../../../components/AppHeader';
 import COLORS from '../../../constant/colors';
-import { w, h, mw, f } from '../../../utils/responsive';
+import { w, h, f } from '../../../utils/responsive';
 import { showAlert } from '../../../components/CustomAlertBox';
+import { getOffers, submitOffer } from '../../../service/buy/buyCommodityService';
 
 const ROLE_THEMES = {
   FPO: { primary: COLORS.fpoPrimary, secondary: COLORS.fpoSecondary, light: COLORS.fpoLight, text: COLORS.fpoText },
@@ -32,7 +32,7 @@ export default function CommodityDetailsScreen({ route, navigation }) {
   const theme = ROLE_THEMES[selectedRole] || ROLE_THEMES.FPO;
   const insets = useSafeAreaInsets();
 
-  // Mock listing details (can be passed via route or defaulted)
+  // Listing details (passed via route)
   const item = route?.params?.item || {
     id: 'COM-9872',
     commodityName: 'Wheat',
@@ -70,19 +70,54 @@ export default function CommodityDetailsScreen({ route, navigation }) {
     isSellerVerified: true,
   };
 
-  // Switch to toggle between viewing as Buyer or Seller (for demo purposes)
-  const [viewAsOwner, setViewAsOwner] = useState(false);
+  // Active negotiation check state
+  const [checkingOffer, setCheckingOffer] = useState(true);
+  const [activeOffer, setActiveOffer] = useState(null);
+  const [apiError, setApiError] = useState(null);
 
   // Offer Placement Form Modal
   const [offerModalVisible, setOfferModalVisible] = useState(false);
+  const [submittingOffer, setSubmittingOffer] = useState(false);
   const [offerPrice, setOfferPrice] = useState(String(item.sellingPrice));
   const [offerQty, setOfferQty] = useState(String(item.quantity));
   const [deliveryType, setDeliveryType] = useState(item.deliveryType);
   const [paymentTimeline, setPaymentTimeline] = useState(item.paymentTimeline);
   const [remarks, setRemarks] = useState('');
 
-  const handlePlaceOffer = () => {
-    if (!offerPrice || !offerQty) {
+  const checkActiveOffer = useCallback(async () => {
+    try {
+      setCheckingOffer(true);
+      setApiError(null);
+      const res = await getOffers({ commodityId: item.id });
+      const offersList = res?.data?.offers || res?.offers || [];
+      
+      // Look for any offer on this commodity that has status pending or countered
+      const found = offersList.find(o => 
+        String(o.commodityId || o.commodity?.id) === String(item.id) && 
+        ['pending', 'countered'].includes(o.status)
+      );
+      
+      setActiveOffer(found || null);
+    } catch (err) {
+      console.warn('[CommodityDetails] Error checking active offer:', err);
+      // Suppress network errors for offline testing/prototype, but set error if no cache exists
+      setApiError(err.message || 'Failed to sync with server.');
+    } finally {
+      setCheckingOffer(false);
+    }
+  }, [item.id]);
+
+  useEffect(() => {
+    if (item.id) {
+      checkActiveOffer();
+      setOfferPrice(String(item.sellingPrice || ''));
+      setOfferQty(String(item.quantity || ''));
+    }
+  }, [item.id, checkActiveOffer, item.sellingPrice, item.quantity]);
+
+  const handlePlaceOffer = async () => {
+    const finalPrice = item.isNegotiable === false ? item.sellingPrice : Number(offerPrice);
+    if (!finalPrice || !offerQty) {
       showAlert({
         type: 'error',
         title: 'Missing Details',
@@ -90,22 +125,74 @@ export default function CommodityDetailsScreen({ route, navigation }) {
       });
       return;
     }
-    setOfferModalVisible(false);
-    showAlert({
-      type: 'success',
-      title: 'Offer Submitted',
-      message: `Your buy offer of ₹${offerPrice}/Qtl for ${offerQty} Ton has been submitted successfully to the seller.`,
-      buttons: [
-        {
-          text: 'View My Offers',
-          onPress: () => {
-            navigation.navigate('MainTabs', { screen: 'Trades' });
+
+    try {
+      setSubmittingOffer(true);
+      const requestData = {
+        commodityId: item.id,
+        price: Number(finalPrice),
+        priceUnit: item.sellingPriceUnit || 'Qt',
+        quantity: Number(offerQty),
+        unit: item.unit || 'Ton',
+        tradeType: deliveryType,
+        paymentTimeline: paymentTimeline,
+        remarks: remarks
+      };
+
+      const res = await submitOffer(requestData);
+      const createdOffer = res?.data || res;
+      setOfferModalVisible(false);
+      
+      showAlert({
+        type: 'success',
+        title: 'Offer Submitted',
+        message: `Your buy offer of ₹${offerPrice}/Qtl for ${offerQty} Ton has been submitted successfully to the seller.`,
+        buttons: [
+          {
+            text: 'View Negotiation',
+            onPress: () => {
+              // Navigate to the negotiation thread
+              navigation.navigate('NegotiationDetails', { offer: createdOffer, item, role: 'buyer' });
+            },
           },
-        },
-        { text: 'Keep Browsing' },
-      ],
-    });
+          { text: 'Keep Browsing' },
+        ],
+      });
+      
+      // Refresh the screen status
+      checkActiveOffer();
+    } catch (error) {
+      console.error('[CommodityDetails] submitOffer error:', error);
+      
+      const isDuplicate = error.statusCode === 409 || error.backendError?.error?.code === 'DUPLICATE_OFFER';
+      
+      showAlert({
+        type: 'error',
+        title: isDuplicate ? 'Active Offer Exists' : 'Submission Failed',
+        message: error.message || 'Failed to submit buy offer. Please try again.',
+      });
+    } finally {
+      setSubmittingOffer(false);
+    }
   };
+
+  if (checkingOffer) {
+    return (
+      <SafeScreen style={{ backgroundColor: theme.light }} top={false} bottom={false}>
+        <AppHeader
+          backgroundColor={theme.primary}
+          title="Commodity Listing"
+          subtitle={`${item.commodityName} (${item.type})`}
+          showBackButton={true}
+          onBackPress={() => navigation.goBack()}
+        />
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color={theme.primary} />
+          <Text style={styles.loadingText}>Checking listing status...</Text>
+        </View>
+      </SafeScreen>
+    );
+  }
 
   return (
     <SafeScreen style={{ backgroundColor: theme.light }} top={false} bottom={false}>
@@ -117,20 +204,15 @@ export default function CommodityDetailsScreen({ route, navigation }) {
         onBackPress={() => navigation.goBack()}
       />
 
-      {/* Prototype Toggle Panel */}
-      <View style={styles.demoToggleCard}>
-        <Text style={styles.demoToggleText}>👤 Prototype Role Toggle: </Text>
-        <View style={styles.toggleRow}>
-          <Text style={[styles.toggleLabel, !viewAsOwner && { color: theme.primary, fontWeight: '700' }]}>Buyer View</Text>
-          <Switch
-            value={viewAsOwner}
-            onValueChange={setViewAsOwner}
-            trackColor={{ false: '#767577', true: theme.primary + '80' }}
-            thumbColor={viewAsOwner ? theme.primary : '#f4f3f4'}
-          />
-          <Text style={[styles.toggleLabel, viewAsOwner && { color: theme.primary, fontWeight: '700' }]}>Owner View</Text>
+      {apiError && (
+        <View style={styles.errorBanner}>
+          <Icon name="alert-circle-outline" size={16} color={COLORS.white} />
+          <Text style={styles.errorBannerText}>{apiError}</Text>
+          <TouchableOpacity onPress={checkActiveOffer} style={styles.retryBadge}>
+            <Text style={styles.retryBadgeText}>Retry</Text>
+          </TouchableOpacity>
         </View>
-      </View>
+      )}
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Gallery Section */}
@@ -303,14 +385,14 @@ export default function CommodityDetailsScreen({ route, navigation }) {
 
       {/* Floating Action Sticky Footer */}
       <View style={[styles.stickyFooter, { paddingBottom: insets.bottom + h(14) }]}>
-        {viewAsOwner ? (
+        {activeOffer ? (
           <TouchableOpacity
-            style={[styles.primaryActionBtn, { backgroundColor: theme.primary }]}
-            onPress={() => navigation.navigate('ReceivedOffers', { item })}
+            style={[styles.primaryActionBtn, { backgroundColor: COLORS.success }]}
+            onPress={() => navigation.navigate('NegotiationDetails', { offer: activeOffer, item, role: 'buyer' })}
             activeOpacity={0.8}
           >
             <Icon name="handshake" size={20} color={COLORS.white} />
-            <Text style={styles.primaryActionText}>View Received Offers (3)</Text>
+            <Text style={styles.primaryActionText}>🤝 View Your Offer</Text>
           </TouchableOpacity>
         ) : (
           <TouchableOpacity
@@ -345,13 +427,19 @@ export default function CommodityDetailsScreen({ route, navigation }) {
                 <View style={styles.halfCol}>
                   <Text style={styles.inputLabel}>Offer Price (₹/{item.sellingPriceUnit})</Text>
                   <TextInput
-                    style={styles.modalInput}
+                    style={[
+                      styles.modalInput,
+                      item.isNegotiable === false && { backgroundColor: '#E2E8F0', color: COLORS.textMuted }
+                    ]}
                     keyboardType="numeric"
-                    value={offerPrice}
+                    value={item.isNegotiable === false ? String(item.sellingPrice) : offerPrice}
                     onChangeText={setOfferPrice}
                     placeholder="e.g. 2400"
+                    editable={item.isNegotiable !== false}
                   />
-                  <Text style={styles.hintText}>Seller asks ₹{item.sellingPrice}</Text>
+                  <Text style={styles.hintText}>
+                    {item.isNegotiable === false ? 'Price is fixed by seller' : `Seller asks ₹${item.sellingPrice}`}
+                  </Text>
                 </View>
                 <View style={styles.halfCol}>
                   <Text style={styles.inputLabel}>Quantity ({item.unit})</Text>
@@ -394,7 +482,7 @@ export default function CommodityDetailsScreen({ route, navigation }) {
               {/* Remarks */}
               <Text style={styles.inputLabel}>Remarks / Custom Clauses</Text>
               <TextInput
-                style={[styles.modalInput, { height: h(60), textAlignVertical: 'top' }]}
+                style={[styles.modalInput, styles.remarksInput]}
                 multiline
                 value={remarks}
                 onChangeText={setRemarks}
@@ -412,14 +500,20 @@ export default function CommodityDetailsScreen({ route, navigation }) {
                 <TouchableOpacity
                   style={[styles.modalBtn, styles.cancelBtn]}
                   onPress={() => setOfferModalVisible(false)}
+                  disabled={submittingOffer}
                 >
                   <Text style={styles.cancelBtnText}>Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.modalBtn, { backgroundColor: theme.primary }]}
                   onPress={handlePlaceOffer}
+                  disabled={submittingOffer}
                 >
-                  <Text style={styles.submitBtnText}>Submit Offer</Text>
+                  {submittingOffer ? (
+                    <ActivityIndicator size="small" color={COLORS.white} />
+                  ) : (
+                    <Text style={styles.submitBtnText}>Submit Offer</Text>
+                  )}
                 </TouchableOpacity>
               </View>
             </ScrollView>
@@ -431,29 +525,39 @@ export default function CommodityDetailsScreen({ route, navigation }) {
 }
 
 const styles = StyleSheet.create({
-  demoToggleCard: {
-    backgroundColor: COLORS.white,
-    paddingVertical: h(10),
-    paddingHorizontal: w(16),
-    flexDirection: 'row',
+  centerContainer: {
+    flex: 1,
     alignItems: 'center',
-    justifyContent: 'space-between',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E9ECEF',
+    justifyContent: 'center',
+    gap: h(12),
   },
-  demoToggleText: {
-    fontSize: f(12),
-    fontWeight: '700',
-    color: COLORS.textLight,
+  loadingText: {
+    fontSize: f(13),
+    color: COLORS.textMuted,
   },
-  toggleRow: {
+  errorBanner: {
+    backgroundColor: COLORS.error,
+    paddingVertical: h(8),
+    paddingHorizontal: w(16),
     flexDirection: 'row',
     alignItems: 'center',
     gap: w(8),
   },
-  toggleLabel: {
+  errorBannerText: {
+    color: COLORS.white,
+    fontSize: f(12),
+    flex: 1,
+  },
+  retryBadge: {
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    paddingHorizontal: w(8),
+    paddingVertical: h(4),
+    borderRadius: 4,
+  },
+  retryBadgeText: {
+    color: COLORS.white,
     fontSize: f(11),
-    color: COLORS.textMuted,
+    fontWeight: '700',
   },
   scrollContent: {
     paddingBottom: h(20),
@@ -859,5 +963,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.textLight,
     marginTop: h(6),
+  },
+  remarksInput: {
+    height: h(60),
+    textAlignVertical: 'top',
   },
 });

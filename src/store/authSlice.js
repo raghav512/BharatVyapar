@@ -4,6 +4,8 @@ import {
   saveAuthSession,
   getStoredAuthSession,
   removeAuthSession,
+  saveLocalProfile,
+  getLocalProfile,
 } from '../service/auth/authStorage';
 import authApi from '../service/auth/authApi';
 import userApi from '../service/user/userApi';
@@ -14,7 +16,17 @@ export const checkStoredToken = createAsyncThunk(
   'auth/checkStoredToken',
   async (_, { rejectWithValue }) => {
     try {
-      return await getStoredAuthSession();
+      const session = await getStoredAuthSession();
+      if (session?.user) {
+        const user = session.user;
+        if (user.shopname !== undefined && user.shopName === undefined) {
+          user.shopName = user.shopname;
+        }
+        if (user.email !== undefined && user.emailId === undefined) {
+          user.emailId = user.email;
+        }
+      }
+      return session;
     } catch (err) {
       return rejectWithValue('Session restore failed. Please login again.');
     }
@@ -52,9 +64,26 @@ export const verifyOtp = createAsyncThunk(
           Corporate: COLORS.corporatePrimary,
         }[role] || COLORS.fpoSecondary;
 
+        let user = response.user || response.data || null;
+        if (user) {
+          const localProfile = await getLocalProfile(mobile);
+          ['shopName', 'shopname', 'emailId', 'email', 'firstName', 'lastName', 'gender', 'village', 'district', 'state'].forEach(key => {
+            if (!user[key] && localProfile[key]) {
+              user[key] = localProfile[key];
+            }
+          });
+
+          if (user.shopname !== undefined && user.shopName === undefined) {
+            user.shopName = user.shopname;
+          }
+          if (user.email !== undefined && user.emailId === undefined) {
+            user.emailId = user.email;
+          }
+        }
+
         const normalizedSession = {
           token: response.token,
-          user: response.user || response.data || null,
+          user,
           refreshToken: response.refreshToken || null,
           selectedRole: role,
           roleColor: roleColor || fallbackColor,
@@ -73,15 +102,36 @@ export const verifyOtp = createAsyncThunk(
 
 export const getUserDetails = createAsyncThunk(
   'auth/getUserDetails',
-  async (_, { rejectWithValue }) => {
+  async (_, { rejectWithValue, getState }) => {
     try {
       console.log('📥 [GET USER] Fetching user details...');
       const response = await userApi.getUserDetails();
-      const user = response?.data?.user || response?.data || null;
+      let user = response?.data?.user || response?.data || null;
+      if (user) {
+        const stateUser = getState().auth.user;
+        const phone = user.phone || stateUser?.phone;
+        if (phone) {
+          const localProfile = await getLocalProfile(phone);
+          ['shopName', 'shopname', 'emailId', 'email', 'firstName', 'lastName', 'gender', 'village', 'district', 'state'].forEach(key => {
+            if (!user[key] && localProfile[key]) {
+              user[key] = localProfile[key];
+            }
+          });
+        }
+
+        if (user.shopname !== undefined && user.shopName === undefined) {
+          user.shopName = user.shopname;
+        }
+        if (user.email !== undefined && user.emailId === undefined) {
+          user.emailId = user.email;
+        }
+      }
       console.log('✅ [GET USER] Success:', {
         name: `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || 'N/A',
         phone: user?.phone || 'N/A',
         role: user?.role || 'N/A',
+        shopName: user?.shopName,
+        emailId: user?.emailId,
       });
       return user;
     } catch (err) {
@@ -102,6 +152,7 @@ export const updateProfile = createAsyncThunk(
         lastName: currentUser.lastName,
         gender: currentUser.gender,
         emailId: currentUser.emailId,
+        shopName: currentUser.shopName,
       });
 
       const response = await userApi.updateProfile(formData, signal);
@@ -109,7 +160,19 @@ export const updateProfile = createAsyncThunk(
       console.log('🔍 [UPDATE PROFILE] Backend response.data:', response?.data);
 
       const backendUser = response?.data || null;
+      if (backendUser) {
+        if (backendUser.shopname !== undefined && backendUser.shopName === undefined) {
+          backendUser.shopName = backendUser.shopname;
+        }
+        if (backendUser.email !== undefined && backendUser.emailId === undefined) {
+          backendUser.emailId = backendUser.email;
+        }
+      }
       const mergedUser = { ...currentUser, ...backendUser, ...clientUpdatedUser };
+
+      if (mergedUser.phone) {
+        await saveLocalProfile(mergedUser.phone, mergedUser);
+      }
 
       console.log('✅ [UPDATE PROFILE] Updated successfully');
       console.log('📝 [UPDATE PROFILE] New data:', {
@@ -117,6 +180,7 @@ export const updateProfile = createAsyncThunk(
         lastName: mergedUser.lastName,
         gender: mergedUser.gender,
         emailId: mergedUser.emailId,
+        shopName: mergedUser.shopName,
         village: mergedUser.village,
         district: mergedUser.district,
         state: mergedUser.state,

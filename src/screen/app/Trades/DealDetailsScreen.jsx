@@ -1,341 +1,568 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useSelector } from 'react-redux';
+import { useFocusEffect } from '@react-navigation/native';
 import { SafeScreen } from '../../../components/SafeScreen';
 import AppHeader from '../../../components/AppHeader';
 import COLORS from '../../../constant/colors';
-import { w, h, mw, f } from '../../../utils/responsive';
+import { w, h, f } from '../../../utils/responsive';
 import { showAlert } from '../../../components/CustomAlertBox';
+import { getDealDetails, updateEscrowStatus } from '../../../service/buy/buyCommodityService';
 
 const ROLE_THEMES = {
-  FPO: { primary: COLORS.fpoPrimary, secondary: COLORS.fpoSecondary, light: COLORS.fpoLight, text: COLORS.fpoText },
-  Trader: { primary: COLORS.traderPrimary, secondary: COLORS.traderSecondary, light: COLORS.traderLight, text: COLORS.traderText },
-  Miller: { primary: COLORS.millerPrimary, secondary: COLORS.millerSecondary, light: COLORS.millerLight, text: COLORS.millerText },
+  FPO:       { primary: COLORS.fpoPrimary,       secondary: COLORS.fpoSecondary,       light: COLORS.fpoLight,       text: COLORS.fpoText },
+  Trader:    { primary: COLORS.traderPrimary,    secondary: COLORS.traderSecondary,    light: COLORS.traderLight,    text: COLORS.traderText },
+  Miller:    { primary: COLORS.millerPrimary,    secondary: COLORS.millerSecondary,    light: COLORS.millerLight,    text: COLORS.millerText },
   Corporate: { primary: COLORS.corporatePrimary, secondary: COLORS.corporateSecondary, light: COLORS.corporateLight, text: COLORS.corporateText },
 };
 
+// Escrow stages for stepper
 const STAGES = [
-  { status: 'pending_payment', title: '1. Fund Escrow', desc: 'Buyer deposits ₹12.10L to secure payment' },
-  { status: 'funded', title: '2. Funded', desc: 'Escrow secured. Seller preparing dispatch' },
-  { status: 'dispatched', title: '3. Dispatched', desc: 'Goods transit. Lorry & invoice uploaded' },
-  { status: 'delivered', title: '4. Delivered', desc: 'Goods arrived. Quality verification ongoing' },
-  { status: 'released', title: '5. Released', desc: 'Funds released to seller. Deal completed!' },
+  { key: 'pending_payment', title: 'Pending Payment', icon: 'cash-clock',     desc: 'Waiting for buyer to fund escrow account.' },
+  { key: 'funded',          title: 'Funded',           icon: 'bank-check',     desc: 'Escrow secured. Seller to prepare dispatch.' },
+  { key: 'dispatched',      title: 'Dispatched',       icon: 'truck-delivery', desc: 'Goods in transit. Lorry receipt uploaded.' },
+  { key: 'delivered',       title: 'Delivered',        icon: 'package-check',  desc: 'Goods received at buyer site. Verifying quality.' },
+  { key: 'released',        title: 'Released ✓',       icon: 'check-decagram', desc: 'Funds released to seller. Deal complete!' },
 ];
+
+// Format date display
+function formatDate(dateStr) {
+  if (!dateStr) return null;
+  return new Date(dateStr).toLocaleString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
 
 export default function DealDetailsScreen({ route, navigation }) {
   const { user, selectedRole: stateRole } = useSelector(state => state.auth);
   const selectedRole = stateRole || user?.role || 'FPO';
   const theme = ROLE_THEMES[selectedRole] || ROLE_THEMES.FPO;
 
-  // Active status in state for interactive prototype simulation
-  const [dealStatus, setDealStatus] = useState('pending_payment');
+  const dealId = route?.params?.dealId || route?.params?.deal?.id || route?.params?.deal?._id;
+  const routeDeal = route?.params?.deal || null;
 
-  const dealInfo = {
-    id: route?.params?.dealId || 'DL-5092',
-    date: '09 Jun 2026',
-    buyer: 'Vikas Trading Corp',
-    seller: 'Malwa Farmer Producer Org (FPO)',
-    commodity: 'Wheat (Lokwan Premium)',
-    grade: 'A+',
-    quantity: '50 Ton',
-    unitPrice: '₹2,420 / Qt',
-    totalValue: '₹12,10,000',
-    deliveryType: 'FOR',
-    paymentTimeline: 'Escrow Lock - Released on delivery verification',
-  };
+  const [deal, setDeal] = useState(routeDeal);
+  const [loading, setLoading] = useState(!routeDeal);
+  const [refreshing, setRefreshing] = useState(false);
+  const [apiError, setApiError] = useState(null);
+  const [updatingEscrow, setUpdatingEscrow] = useState(false);
 
-  // Get index of current stage
-  const currentStageIndex = STAGES.findIndex(s => s.status === dealStatus);
+  const loadDeal = useCallback(async (isRefresh = false) => {
+    if (!dealId && !routeDeal) {
+      setApiError('No deal ID provided.');
+      setLoading(false);
+      return;
+    }
+    if (!dealId) { setLoading(false); return; }
+    try {
+      if (isRefresh) setRefreshing(true);
+      else setLoading(true);
+      setApiError(null);
+      const res = await getDealDetails(dealId);
+      const dealData = res?.data?.deal || res?.deal || res?.data || res;
+      setDeal(dealData);
+    } catch (err) {
+      console.error('[DealDetails] loadDeal error:', err);
+      setApiError(err?.message || 'Failed to load deal details.');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [dealId, routeDeal]);
 
-  // Simulation handlers
-  const handleFundEscrow = () => {
+  useFocusEffect(
+    useCallback(() => {
+      loadDeal();
+    }, [loadDeal])
+  );
+
+  // Determine current user's role in this deal
+  const userId = user?._id || user?.id;
+  const routeRole = route?.params?.role;
+  const isBuyer  = routeRole
+    ? routeRole === 'buyer'
+    : !!(deal && userId && String(deal.buyerId  || deal.buyer?.id  || deal.buyer?._id)  === String(userId));
+  const isSeller = routeRole
+    ? routeRole === 'seller'
+    : !!(deal && userId && String(deal.sellerId || deal.seller?.id || deal.seller?._id) === String(userId));
+
+  // Escrow action handler
+  const handleEscrowUpdate = (newStatus, confirmTitle, confirmMsg) => {
     showAlert({
       type: 'confirm',
-      title: 'Deposit Funds',
-      message: 'Would you like to simulate Vikas Trading Corp depositing ₹12,10,000 in the secure Escrow account?',
+      title: confirmTitle,
+      message: confirmMsg,
       buttons: [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Deposit',
-          onPress: () => {
-            setDealStatus('funded');
-            showAlert({
-              type: 'success',
-              title: 'Escrow Funded',
-              message: 'Payment received. Notification sent to Seller to initiate dispatch.',
-            });
+          text: 'Confirm',
+          onPress: async () => {
+            try {
+              setUpdatingEscrow(true);
+              await updateEscrowStatus(deal?.id || deal?._id || dealId, newStatus);
+              showAlert({
+                type: 'success',
+                title: 'Updated!',
+                message: `Deal stage updated to "${newStatus.replace('_', ' ')}".`,
+              });
+              loadDeal(true);
+            } catch (err) {
+              console.error('[DealDetails] updateEscrowStatus error:', err);
+              showAlert({
+                type: 'error',
+                title: 'Update Failed',
+                message: err?.message || 'Could not update escrow status. Please try again.',
+              });
+            } finally {
+              setUpdatingEscrow(false);
+            }
           },
         },
       ],
     });
   };
 
-  const handleDispatch = () => {
+  const handleDispute = () => {
     showAlert({
       type: 'confirm',
-      title: 'Dispatch Goods',
-      message: 'Simulate dispatching goods? Enter mock vehicle details (MH-09-CQ-2812) and upload lorry receipt.',
+      title: 'Raise Dispute / Cancel Deal',
+      message: 'Are you sure you want to raise a dispute or cancel this deal? Our team will review and assist you.',
       buttons: [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Mark Dispatched',
-          onPress: () => {
-            setDealStatus('dispatched');
-            showAlert({
-              type: 'success',
-              title: 'Dispatched & Transit',
-              message: 'Lorry details and commercial invoice uploaded. GPS tracking activated.',
-            });
+          text: 'Raise Dispute',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setUpdatingEscrow(true);
+              await updateEscrowStatus(deal?.id || deal?._id || dealId, 'cancelled');
+              showAlert({
+                type: 'info',
+                title: 'Dispute Raised',
+                message: 'Our support team has been notified. They will contact you within 24 hours.',
+              });
+              loadDeal(true);
+            } catch (err) {
+              showAlert({
+                type: 'error',
+                title: 'Failed',
+                message: err?.message || 'Could not raise dispute. Please try again.',
+              });
+            } finally {
+              setUpdatingEscrow(false);
+            }
           },
         },
       ],
     });
   };
 
-  const handleConfirmDelivery = () => {
-    setDealStatus('delivered');
-    showAlert({
-      type: 'info',
-      title: 'Goods Arrived',
-      message: 'Goods received at buyer site. Quality inspection triggered.',
-    });
+  // ─── Loading ────────────────────────────────────────────────────────
+  if (loading) {
+    return (
+      <SafeScreen style={{ backgroundColor: theme.light }} top={false} bottom={false}>
+        <AppHeader
+          backgroundColor={theme.primary}
+          title="Escrow Deal"
+          subtitle={dealId || '—'}
+          showBackButton={true}
+          onBackPress={() => navigation.goBack()}
+        />
+        <View style={styles.centeredContainer}>
+          <ActivityIndicator size="large" color={theme.primary} />
+          <Text style={styles.loadingText}>Loading deal details...</Text>
+        </View>
+      </SafeScreen>
+    );
+  }
+
+  // ─── Error (no data) ────────────────────────────────────────────────
+  if (apiError && !deal) {
+    return (
+      <SafeScreen style={{ backgroundColor: theme.light }} top={false} bottom={false}>
+        <AppHeader
+          backgroundColor={theme.primary}
+          title="Escrow Deal"
+          showBackButton={true}
+          onBackPress={() => navigation.goBack()}
+        />
+        <View style={styles.centeredContainer}>
+          <Icon name="alert-circle-outline" size={48} color={COLORS.error} />
+          <Text style={styles.errorTitle}>Could Not Load Deal</Text>
+          <Text style={styles.errorDesc}>{apiError}</Text>
+          <TouchableOpacity style={[styles.retryBtn, { backgroundColor: theme.primary }]} onPress={() => loadDeal()}>
+            <Text style={styles.retryBtnText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeScreen>
+    );
+  }
+
+  const escrowStatus   = deal?.escrowStatus || 'pending_payment';
+  const isCancelled    = escrowStatus === 'cancelled';
+  const isReleased     = escrowStatus === 'released';
+  const currentStageIdx = STAGES.findIndex(s => s.key === escrowStatus);
+
+  // Timestamps per stage
+  const stageTimestamps = {
+    pending_payment: deal?.createdAt,
+    funded:          deal?.fundedAt,
+    dispatched:      deal?.dispatchedAt,
+    delivered:       deal?.deliveredAt,
+    released:        deal?.releasedAt,
   };
 
-  const handleReleasePayment = () => {
-    showAlert({
-      type: 'confirm',
-      title: 'Release Payment',
-      message: 'Inspection passed. Confirm releasing ₹12,10,000 escrow funds to Malwa FPO?',
-      buttons: [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Release Funds',
-          onPress: () => {
-            setDealStatus('released');
-            showAlert({
-              type: 'success',
-              title: 'Deal Completed',
-              message: 'Funds released successfully. Contract closed.',
-            });
-          },
-        },
-      ],
-    });
-  };
+  // Determine which CTA to show
+  const showFundEscrow   = isBuyer  && escrowStatus === 'pending_payment';
+  const showDispatch     = isSeller && escrowStatus === 'funded';
+  const showConfirmDelivery = isBuyer && escrowStatus === 'dispatched';
+  const showAnyAction    = showFundEscrow || showDispatch || showConfirmDelivery;
+  const showRaiseDispute = !isReleased && !isCancelled;
 
-  const handleReset = () => {
-    setDealStatus('pending_payment');
-  };
+  const finalPrice    = deal?.finalPrice    || deal?.price    || 0;
+  const finalQty      = deal?.finalQuantity || deal?.quantity || 0;
+  const totalValue    = deal?.totalValue    || (finalPrice * finalQty);
+  const commodityName = deal?.commodity?.name || route?.params?.item?.commodityName || '—';
+  const tradeType     = deal?.tradeType || 'FOR';
 
   return (
     <SafeScreen style={{ backgroundColor: theme.light }} top={false} bottom={false}>
       <AppHeader
         backgroundColor={theme.primary}
-        title="Escrow Deal Details"
-        subtitle={dealInfo.id}
+        title="Escrow Deal"
+        subtitle={deal?.id || dealId || '—'}
         showBackButton={true}
         onBackPress={() => navigation.goBack()}
       />
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Deal Summary Header */}
+      {/* Error banner */}
+      {apiError && deal && (
+        <View style={styles.errorBanner}>
+          <Icon name="alert-circle-outline" size={15} color={COLORS.white} />
+          <Text style={styles.errorBannerText}>{apiError}</Text>
+          <TouchableOpacity onPress={() => loadDeal(true)} style={styles.retryBadge}>
+            <Text style={styles.retryBadgeText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => loadDeal(true)}
+            colors={[theme.primary]}
+            tintColor={theme.primary}
+          />
+        }
+      >
+        {/* Cancelled Banner */}
+        {isCancelled && (
+          <View style={styles.cancelledBanner}>
+            <Icon name="close-circle" size={22} color={COLORS.error} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.cancelledTitle}>Deal Cancelled</Text>
+              {deal?.cancelReason && (
+                <Text style={styles.cancelledDesc}>{deal.cancelReason}</Text>
+              )}
+            </View>
+          </View>
+        )}
+
+        {/* Deal Summary Card */}
         <View style={styles.dealCard}>
           <View style={styles.cardHeader}>
-            <View>
-              <Text style={styles.commodityTitle}>{dealInfo.commodity}</Text>
-              <Text style={styles.dealMeta}>Contract Date: {dealInfo.date}</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.commodityTitle}>{commodityName}</Text>
+              <Text style={styles.dealMeta}>Deal Date: {formatDate(deal?.createdAt) || '—'}</Text>
             </View>
             <View style={[styles.badge, { backgroundColor: theme.primary + '15' }]}>
-              <Text style={[styles.badgeText, { color: theme.primary }]}>Escrow Enabled</Text>
+              <Text style={[styles.badgeText, { color: theme.primary }]}>🔐 Escrow</Text>
             </View>
           </View>
 
           <View style={styles.divider} />
 
           <View style={styles.detailRow}>
-            <Text style={styles.label}>Buyer:</Text>
-            <Text style={styles.value}>{dealInfo.buyer}</Text>
+            <Text style={styles.label}>Buyer</Text>
+            <Text style={styles.value}>{deal?.buyer?.name || '—'}</Text>
           </View>
           <View style={styles.detailRow}>
-            <Text style={styles.label}>Seller:</Text>
-            <Text style={styles.value}>{dealInfo.seller}</Text>
+            <Text style={styles.label}>Seller</Text>
+            <Text style={styles.value}>{deal?.seller?.name || '—'}</Text>
           </View>
           <View style={styles.detailRow}>
-            <Text style={styles.label}>Quantity:</Text>
-            <Text style={styles.value}>{dealInfo.quantity} (Grade {dealInfo.grade})</Text>
+            <Text style={styles.label}>Quantity</Text>
+            <Text style={styles.value}>{finalQty} {deal?.unit || ''}</Text>
           </View>
           <View style={styles.detailRow}>
-            <Text style={styles.label}>Contract Value:</Text>
-            <Text style={[styles.value, { fontWeight: '800', color: theme.primary }]}>{dealInfo.totalValue}</Text>
+            <Text style={styles.label}>Final Price</Text>
+            <Text style={styles.value}>₹{finalPrice.toLocaleString('en-IN')}/{deal?.priceUnit || 'Qt'}</Text>
           </View>
           <View style={styles.detailRow}>
-            <Text style={styles.label}>Delivery Basis:</Text>
-            <Text style={styles.value}>{dealInfo.deliveryType === 'FOR' ? 'FOR Destination' : 'Ex-Warehouse'}</Text>
+            <Text style={styles.label}>Total Value</Text>
+            <Text style={[styles.value, { fontWeight: '800', color: theme.primary }]}>
+              ₹{Number(totalValue).toLocaleString('en-IN')}
+            </Text>
+          </View>
+          <View style={styles.detailRow}>
+            <Text style={styles.label}>Delivery Basis</Text>
+            <Text style={styles.value}>{tradeType === 'FOR' ? 'FOR (Freight to Destination)' : 'Ex-Warehouse'}</Text>
           </View>
         </View>
 
-        {/* Stepper Status Tracking */}
+        {/* Escrow Stepper */}
         <View style={styles.stepperContainer}>
-          <Text style={[styles.sectionTitle, { color: theme.primary }]}>Escrow & Logistics Stepper</Text>
+          <Text style={[styles.sectionTitle, { color: theme.primary }]}>Escrow & Logistics Progress</Text>
 
-          {STAGES.map((st, idx) => {
-            const isCompleted = idx < currentStageIndex;
-            const isActive = idx === currentStageIndex;
-            const isFuture = idx > currentStageIndex;
+          {STAGES.map((stage, idx) => {
+            const isCompleted = !isCancelled && idx < currentStageIdx;
+            const isActive    = !isCancelled && idx === currentStageIdx;
+            const isFuture    = idx > currentStageIdx;
+            const ts          = stageTimestamps[stage.key];
 
-            let iconName = 'checkbox-blank-circle-outline';
+            let iconName  = 'checkbox-blank-circle-outline';
             let iconColor = COLORS.textMuted;
-            if (isCompleted) {
-              iconName = 'check-circle';
+            if (isCancelled && idx === currentStageIdx) {
+              iconName  = 'close-circle';
+              iconColor = COLORS.error;
+            } else if (isCompleted) {
+              iconName  = 'check-circle';
               iconColor = COLORS.success;
             } else if (isActive) {
-              iconName = 'circle-slice-8';
+              iconName  = 'circle-slice-8';
               iconColor = theme.primary;
             }
 
             return (
-              <View key={st.status} style={styles.stepRow}>
-                {/* Visual Line connector */}
+              <View key={stage.key} style={styles.stepRow}>
                 <View style={styles.stepIndicator}>
                   <Icon name={iconName} size={22} color={iconColor} />
                   {idx < STAGES.length - 1 && (
-                    <View 
-                      style={[
-                        styles.stepLine, 
-                        { backgroundColor: isCompleted ? COLORS.success : '#E9ECEF' }
-                      ]} 
-                    />
+                    <View style={[styles.stepLine, { backgroundColor: isCompleted ? COLORS.success : '#E9ECEF' }]} />
                   )}
                 </View>
-
-                {/* Step Text Info */}
-                <View style={[styles.stepTextContent, isActive && styles.activeStepBg]}>
-                  <Text 
-                    style={[
-                      styles.stepTitle, 
-                      isActive && { color: theme.primary, fontWeight: '800' },
-                      isCompleted && { color: COLORS.success }
-                    ]}
-                  >
-                    {st.title}
+                <View style={[styles.stepContent, isActive && styles.activeStepContent]}>
+                  <Text style={[
+                    styles.stepTitle,
+                    isActive     && { color: theme.primary, fontWeight: '800' },
+                    isCompleted  && { color: COLORS.success },
+                    isFuture     && { color: COLORS.textMuted },
+                  ]}>
+                    {stage.title}
                   </Text>
-                  <Text style={styles.stepDesc}>{st.desc}</Text>
+                  <Text style={styles.stepDesc}>{stage.desc}</Text>
+                  {ts ? (
+                    <Text style={styles.stepTimestamp}>✓ {formatDate(ts)}</Text>
+                  ) : (
+                    isActive && <Text style={styles.stepPending}>Pending action...</Text>
+                  )}
                 </View>
               </View>
             );
           })}
         </View>
 
-        {/* Invoices & Documents Section */}
+        {/* Deal Documents */}
         <View style={styles.docsCard}>
           <Text style={[styles.sectionTitle, { color: theme.primary }]}>Deal Documents</Text>
 
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.docItem}
-            onPress={() => showAlert({ type: 'info', title: 'Contract', message: 'Opening Digitally signed tripartite contract agreement.' })}
+            onPress={() => showAlert({ type: 'info', title: 'Contract', message: 'Opening digitally signed tripartite contract agreement.' })}
           >
             <View style={styles.docInfo}>
-              <Icon name="file-sign" size={24} color="#007799" />
+              <Icon name="file-sign" size={22} color="#007799" />
               <View>
                 <Text style={styles.docTitle}>Tripartite Contract Agreement.pdf</Text>
                 <Text style={styles.docMeta}>Signed by Buyer, Seller & Escrow Agent</Text>
               </View>
             </View>
-            <Icon name="download" size={20} color={COLORS.textLight} />
+            <Icon name="download" size={18} color={COLORS.textLight} />
           </TouchableOpacity>
 
-          {currentStageIndex >= 2 && (
-            <TouchableOpacity 
+          {(escrowStatus === 'dispatched' || escrowStatus === 'delivered' || escrowStatus === 'released') && (
+            <TouchableOpacity
               style={styles.docItem}
               onPress={() => showAlert({ type: 'info', title: 'Commercial Invoice', message: 'Opening seller commercial invoice.' })}
             >
               <View style={styles.docInfo}>
-                <Icon name="file-percent" size={24} color="#D69E2E" />
+                <Icon name="file-percent" size={22} color="#D69E2E" />
                 <View>
-                  <Text style={styles.docTitle}>Commercial_Invoice_MalwaFPO.pdf</Text>
+                  <Text style={styles.docTitle}>Commercial Invoice.pdf</Text>
                   <Text style={styles.docMeta}>Tax invoice submitted by Seller</Text>
                 </View>
               </View>
-              <Icon name="download" size={20} color={COLORS.textLight} />
+              <Icon name="download" size={18} color={COLORS.textLight} />
             </TouchableOpacity>
           )}
 
-          {currentStageIndex >= 2 && (
-            <TouchableOpacity 
+          {(escrowStatus === 'dispatched' || escrowStatus === 'delivered' || escrowStatus === 'released') && (
+            <TouchableOpacity
               style={styles.docItem}
-              onPress={() => showAlert({ type: 'info', title: 'Lorry Receipt', message: 'Opening transport Lorry Receipt.' })}
+              onPress={() => showAlert({ type: 'info', title: 'Lorry Receipt', message: 'Opening transport lorry receipt.' })}
             >
               <View style={styles.docInfo}>
-                <Icon name="file-cabinet" size={24} color="#805AD5" />
+                <Icon name="file-cabinet" size={22} color="#805AD5" />
                 <View>
-                  <Text style={styles.docTitle}>Lorry_Receipt_MH09CQ2812.pdf</Text>
-                  <Text style={styles.docMeta}>Lorry bill of lading submitted on dispatch</Text>
+                  <Text style={styles.docTitle}>Lorry Receipt.pdf</Text>
+                  <Text style={styles.docMeta}>Bill of lading uploaded by Seller</Text>
                 </View>
               </View>
-              <Icon name="download" size={20} color={COLORS.textLight} />
+              <Icon name="download" size={18} color={COLORS.textLight} />
             </TouchableOpacity>
           )}
         </View>
 
-        {/* Prototype Simulation Tools */}
-        <View style={styles.simulationCard}>
-          <View style={styles.simulationHeader}>
-            <Icon name="cogs" size={18} color="#4A5568" />
-            <Text style={styles.simulationTitle}>Interactive Flow Simulator</Text>
-          </View>
-          <Text style={styles.simulationDesc}>
-            Press the buttons below to manually shift deal status to demonstrate correct API/REST-escrow behavior.
-          </Text>
+        {/* Role-Based Escrow Action */}
+        {!isCancelled && !isReleased && (
+          <View style={styles.actionCard}>
+            <Text style={[styles.sectionTitle, { color: theme.primary }]}>Action Required</Text>
 
-          <View style={styles.simActionsRow}>
-            {dealStatus === 'pending_payment' && (
-              <TouchableOpacity style={[styles.simBtn, { backgroundColor: theme.primary }]} onPress={handleFundEscrow}>
-                <Text style={styles.simBtnText}>💸 Simulate Buyer Payment</Text>
-              </TouchableOpacity>
-            )}
-
-            {dealStatus === 'funded' && (
-              <TouchableOpacity style={[styles.simBtn, { backgroundColor: theme.primary }]} onPress={handleDispatch}>
-                <Text style={styles.simBtnText}>🚚 Simulate Seller Dispatch</Text>
-              </TouchableOpacity>
-            )}
-
-            {dealStatus === 'dispatched' && (
-              <View style={{ gap: h(8), width: '100%' }}>
-                <TouchableOpacity style={[styles.simBtn, { backgroundColor: '#3182CE' }]} onPress={handleConfirmDelivery}>
-                  <Text style={styles.simBtnText}>📍 Simulate Cargo Arrival</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.simBtn, { backgroundColor: theme.primary }]} onPress={handleReleasePayment}>
-                  <Text style={styles.simBtnText}>🔓 Release Escrow Funds</Text>
+            {showFundEscrow && (
+              <View style={styles.actionBlock}>
+                <View style={styles.actionDesc}>
+                  <Icon name="cash-multiple" size={22} color="#3182CE" />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.actionTitle}>Proceed to Payment</Text>
+                    <Text style={styles.actionSubtitle}>
+                      Transfer ₹{Number(totalValue).toLocaleString('en-IN')} to BharatVyapar secure escrow to activate this deal.
+                    </Text>
+                  </View>
+                </View>
+                <TouchableOpacity
+                  style={[styles.actionBtn, { backgroundColor: '#3182CE' }]}
+                  disabled={updatingEscrow}
+                  onPress={() => handleEscrowUpdate(
+                    'funded',
+                    'Confirm Escrow Payment',
+                    `Transfer ₹${Number(totalValue).toLocaleString('en-IN')} to secure escrow account to initiate deal?`
+                  )}
+                >
+                  {updatingEscrow ? (
+                    <ActivityIndicator size="small" color={COLORS.white} />
+                  ) : (
+                    <>
+                      <Icon name="bank-transfer" size={18} color={COLORS.white} />
+                      <Text style={styles.actionBtnText}>Proceed to Payment</Text>
+                    </>
+                  )}
                 </TouchableOpacity>
               </View>
             )}
 
-            {dealStatus === 'delivered' && (
-              <TouchableOpacity style={[styles.simBtn, { backgroundColor: theme.primary }]} onPress={handleReleasePayment}>
-                <Text style={styles.simBtnText}>🔓 Release Escrow Funds</Text>
-              </TouchableOpacity>
-            )}
-
-            {dealStatus === 'released' && (
-              <View style={styles.completedAlert}>
-                <Icon name="check-decagram" size={22} color={COLORS.success} />
-                <Text style={styles.completedText}>Escrow payment successfully settled! Deal Completed.</Text>
+            {showDispatch && (
+              <View style={styles.actionBlock}>
+                <View style={styles.actionDesc}>
+                  <Icon name="truck-delivery" size={22} color="#DD6B20" />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.actionTitle}>Mark as Dispatched</Text>
+                    <Text style={styles.actionSubtitle}>
+                      Payment is secured in escrow. Upload lorry receipt and mark goods as shipped.
+                    </Text>
+                  </View>
+                </View>
+                <TouchableOpacity
+                  style={[styles.actionBtn, { backgroundColor: '#DD6B20' }]}
+                  disabled={updatingEscrow}
+                  onPress={() => handleEscrowUpdate(
+                    'dispatched',
+                    'Confirm Dispatch',
+                    'Confirm that goods have been dispatched and lorry receipt has been uploaded?'
+                  )}
+                >
+                  {updatingEscrow ? (
+                    <ActivityIndicator size="small" color={COLORS.white} />
+                  ) : (
+                    <>
+                      <Icon name="truck-fast" size={18} color={COLORS.white} />
+                      <Text style={styles.actionBtnText}>Mark as Dispatched</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
               </View>
             )}
-          </View>
 
-          <TouchableOpacity style={styles.resetBtn} onPress={handleReset}>
-            <Text style={styles.resetBtnText}>🔄 Reset Deal Flow</Text>
-          </TouchableOpacity>
-        </View>
+            {showConfirmDelivery && (
+              <View style={styles.actionBlock}>
+                <View style={styles.actionDesc}>
+                  <Icon name="package-check" size={22} color="#38A169" />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.actionTitle}>Confirm Delivery</Text>
+                    <Text style={styles.actionSubtitle}>
+                      Goods have arrived? Confirm receipt to trigger quality inspection and fund release.
+                    </Text>
+                  </View>
+                </View>
+                <TouchableOpacity
+                  style={[styles.actionBtn, { backgroundColor: '#38A169' }]}
+                  disabled={updatingEscrow}
+                  onPress={() => handleEscrowUpdate(
+                    'delivered',
+                    'Confirm Delivery',
+                    'Confirm that you have received the goods in good condition? This will trigger quality verification and escrow release.'
+                  )}
+                >
+                  {updatingEscrow ? (
+                    <ActivityIndicator size="small" color={COLORS.white} />
+                  ) : (
+                    <>
+                      <Icon name="check-circle" size={18} color={COLORS.white} />
+                      <Text style={styles.actionBtnText}>Confirm Delivery</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {!showAnyAction && !isCancelled && !isReleased && (
+              <View style={styles.waitingBlock}>
+                <Icon name="timer-sand" size={22} color={COLORS.textMuted} />
+                <Text style={styles.waitingText}>
+                  {escrowStatus === 'funded'    ? 'Waiting for Seller to dispatch goods...'
+                   : escrowStatus === 'dispatched' ? 'Waiting for Buyer to confirm delivery...'
+                   : escrowStatus === 'delivered'  ? 'Quality verification in progress. Funds releasing soon...'
+                   : 'Processing...'}
+                </Text>
+              </View>
+            )}
+
+            {/* Raise Dispute / Cancel Link */}
+            {showRaiseDispute && (
+              <TouchableOpacity style={styles.disputeLink} onPress={handleDispute} disabled={updatingEscrow}>
+                <Icon name="alert-octagon-outline" size={16} color={COLORS.error} />
+                <Text style={styles.disputeLinkText}>Raise Dispute / Cancel Deal</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+
+        {/* Released — Success state */}
+        {isReleased && (
+          <View style={styles.completedCard}>
+            <Icon name="check-decagram" size={36} color={COLORS.success} />
+            <Text style={styles.completedTitle}>Deal Successfully Completed! 🎉</Text>
+            <Text style={styles.completedDesc}>
+              Escrow payment of ₹{Number(totalValue).toLocaleString('en-IN')} released to seller.
+              Contract closed on {formatDate(deal?.releasedAt) || '—'}.
+            </Text>
+          </View>
+        )}
 
         <View style={{ height: h(40) }} />
       </ScrollView>
@@ -344,8 +571,88 @@ export default function DealDetailsScreen({ route, navigation }) {
 }
 
 const styles = StyleSheet.create({
+  centeredContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: h(12),
+    padding: w(20),
+  },
+  loadingText: {
+    fontSize: f(13),
+    color: COLORS.textMuted,
+  },
+  errorTitle: {
+    fontSize: f(16),
+    fontWeight: '800',
+    color: COLORS.text,
+    marginTop: h(8),
+  },
+  errorDesc: {
+    fontSize: f(12),
+    color: COLORS.textLight,
+    textAlign: 'center',
+    lineHeight: h(18),
+  },
+  retryBtn: {
+    paddingHorizontal: w(24),
+    paddingVertical: h(10),
+    borderRadius: 10,
+    marginTop: h(8),
+  },
+  retryBtnText: {
+    color: COLORS.white,
+    fontWeight: '700',
+    fontSize: f(13),
+  },
+  errorBanner: {
+    backgroundColor: COLORS.error,
+    paddingVertical: h(8),
+    paddingHorizontal: w(16),
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: w(8),
+  },
+  errorBannerText: {
+    color: COLORS.white,
+    fontSize: f(12),
+    flex: 1,
+  },
+  retryBadge: {
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    paddingHorizontal: w(8),
+    paddingVertical: h(4),
+    borderRadius: 4,
+  },
+  retryBadgeText: {
+    color: COLORS.white,
+    fontSize: f(11),
+    fontWeight: '700',
+  },
   scrollContent: {
     padding: w(16),
+  },
+  cancelledBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: w(10),
+    backgroundColor: '#FFF5F5',
+    borderRadius: 12,
+    padding: w(14),
+    borderWidth: 1.5,
+    borderColor: '#FEB2B2',
+    marginBottom: h(14),
+  },
+  cancelledTitle: {
+    fontSize: f(14),
+    fontWeight: '800',
+    color: '#742A2A',
+    marginBottom: h(2),
+  },
+  cancelledDesc: {
+    fontSize: f(12),
+    color: '#C53030',
+    lineHeight: h(16),
   },
   dealCard: {
     backgroundColor: COLORS.white,
@@ -362,6 +669,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
+    marginBottom: h(4),
   },
   commodityTitle: {
     fontSize: f(16),
@@ -400,7 +708,11 @@ const styles = StyleSheet.create({
     fontSize: f(12),
     color: COLORS.text,
     fontWeight: '600',
+    textAlign: 'right',
+    flex: 1,
+    marginLeft: w(12),
   },
+  // Stepper
   stepperContainer: {
     backgroundColor: COLORS.white,
     borderRadius: 16,
@@ -430,14 +742,16 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#E9ECEF',
     marginVertical: h(4),
+    minHeight: h(24),
   },
-  stepTextContent: {
+  stepContent: {
     flex: 1,
     paddingBottom: h(16),
-    paddingHorizontal: w(8),
+    paddingHorizontal: w(10),
     borderRadius: 8,
+    marginBottom: h(2),
   },
-  activeStepBg: {
+  activeStepContent: {
     backgroundColor: '#F8F9FA',
   },
   stepTitle: {
@@ -451,6 +765,19 @@ const styles = StyleSheet.create({
     marginTop: h(2),
     lineHeight: h(14),
   },
+  stepTimestamp: {
+    fontSize: f(10),
+    color: COLORS.success,
+    marginTop: h(3),
+    fontWeight: '600',
+  },
+  stepPending: {
+    fontSize: f(10),
+    color: COLORS.textMuted,
+    marginTop: h(3),
+    fontStyle: 'italic',
+  },
+  // Documents
   docsCard: {
     backgroundColor: COLORS.white,
     borderRadius: 16,
@@ -486,71 +813,104 @@ const styles = StyleSheet.create({
     color: COLORS.textMuted,
     marginTop: h(1),
   },
-  simulationCard: {
-    backgroundColor: '#EDF2F7',
-    borderWidth: 1.5,
-    borderColor: '#CBD5E0',
+  // Action Card
+  actionCard: {
+    backgroundColor: COLORS.white,
     borderRadius: 16,
     padding: w(16),
     marginBottom: h(16),
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    borderTopWidth: 3,
+    borderTopColor: '#3182CE',
   },
-  simulationHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: w(6),
-    marginBottom: h(4),
-  },
-  simulationTitle: {
-    fontSize: f(13),
-    fontWeight: '800',
-    color: '#4A5568',
-  },
-  simulationDesc: {
-    fontSize: f(11),
-    color: '#718096',
-    lineHeight: h(15),
+  actionBlock: {
     marginBottom: h(12),
   },
-  simActionsRow: {
-    width: '100%',
+  actionDesc: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: w(10),
+    marginBottom: h(12),
   },
-  simBtn: {
-    height: h(42),
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: '100%',
+  actionTitle: {
+    fontSize: f(14),
+    fontWeight: '800',
+    color: COLORS.text,
   },
-  simBtnText: {
-    color: COLORS.white,
-    fontWeight: '700',
-    fontSize: f(13),
+  actionSubtitle: {
+    fontSize: f(11),
+    color: COLORS.textLight,
+    lineHeight: h(16),
+    marginTop: h(2),
   },
-  completedAlert: {
+  actionBtn: {
+    height: h(46),
+    borderRadius: 12,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: w(8),
-    padding: w(10),
-    borderRadius: 8,
-    backgroundColor: '#C6F6D5',
-    borderWidth: 1,
-    borderColor: '#9AE6B4',
   },
-  completedText: {
-    fontSize: f(11),
-    color: '#22543D',
-    fontWeight: '700',
+  actionBtnText: {
+    color: COLORS.white,
+    fontWeight: '800',
+    fontSize: f(14),
+  },
+  waitingBlock: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: w(10),
+    backgroundColor: '#F8F9FA',
+    borderRadius: 10,
+    padding: w(14),
+    marginBottom: h(12),
+  },
+  waitingText: {
+    fontSize: f(12),
+    color: COLORS.textLight,
     flex: 1,
+    lineHeight: h(17),
   },
-  resetBtn: {
+  disputeLink: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: h(12),
-    paddingVertical: h(6),
+    gap: w(6),
+    paddingVertical: h(10),
+    borderTopWidth: 1,
+    borderTopColor: '#F1F3F5',
+    marginTop: h(4),
   },
-  resetBtnText: {
-    fontSize: f(11),
-    color: '#4A5568',
+  disputeLinkText: {
+    fontSize: f(12),
     fontWeight: '700',
+    color: COLORS.error,
+  },
+  // Completed
+  completedCard: {
+    backgroundColor: '#F0FFF4',
+    borderRadius: 16,
+    padding: w(24),
+    marginBottom: h(16),
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#9AE6B4',
+    gap: h(10),
+  },
+  completedTitle: {
+    fontSize: f(16),
+    fontWeight: '800',
+    color: '#22543D',
+    textAlign: 'center',
+  },
+  completedDesc: {
+    fontSize: f(12),
+    color: '#276749',
+    textAlign: 'center',
+    lineHeight: h(18),
   },
 });
