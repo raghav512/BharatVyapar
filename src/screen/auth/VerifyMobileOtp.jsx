@@ -18,6 +18,7 @@ import { verifyOtp } from '../../store/authSlice';
 import { useAuth } from '../../hook/useAuth';
 import COLORS from '../../constant/colors';
 import { w, h, mw, f } from '../../utils/responsive';
+import { useTranslation } from '../../hook/useTranslation';
 
 export default function VerifyMobileOtp({ route, navigation }) {
   const {
@@ -28,6 +29,7 @@ export default function VerifyMobileOtp({ route, navigation }) {
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [error, setError] = useState('');
   const dispatch = useDispatch();
+  const { t } = useTranslation();
   const { verifyOtpLoading, verifyOtpError } = useAuth();
   const inputs = useRef([]);
   const scrollViewRef = useRef(null);
@@ -140,7 +142,7 @@ export default function VerifyMobileOtp({ route, navigation }) {
     const enteredOtp = otp.join('');
 
     if (enteredOtp.length < 6) {
-      setError('Please enter all 6 digits');
+      setError(t('Please enter all 6 digits'));
       shakeError();
       return;
     }
@@ -166,7 +168,7 @@ export default function VerifyMobileOtp({ route, navigation }) {
     );
 
     if (verifyOtp.rejected.match(action)) {
-      setError(action.payload || 'Verify OTP failed');
+      setError(t(action.payload || 'Verify OTP failed'));
       shakeError();
     }
   };
@@ -219,11 +221,13 @@ export default function VerifyMobileOtp({ route, navigation }) {
                   allowFontScaling={false}
                   numberOfLines={1}
                 >
-                  {selectedRole}
+                  {t(selectedRole)}
                 </Text>
               </View>
-              <Text style={styles.appName}>Bharat FPO Vyapar</Text>
-              <Text style={styles.tagline}>{selectedRole} Login</Text>
+              <Text style={styles.appName}>{t('Bharat FPO Vyapar')}</Text>
+              <Text style={styles.tagline}>
+                {t('{role} Login').replace('{role}', t(selectedRole))}
+              </Text>
             </View>
 
             {/* Card */}
@@ -236,8 +240,8 @@ export default function VerifyMobileOtp({ route, navigation }) {
                 },
               ]}
             >
-              <Text style={styles.cardTitle}>Enter OTP</Text>
-              <Text style={styles.cardSubtitle}>6-digit code sent to</Text>
+              <Text style={styles.cardTitle}>{t('Enter OTP')}</Text>
+              <Text style={styles.cardSubtitle}>{t('6-digit code sent to')}</Text>
 
               <View style={styles.mobileRow}>
                 <Text style={[styles.mobile, { color: roleColor }]}>
@@ -315,17 +319,17 @@ export default function VerifyMobileOtp({ route, navigation }) {
                   {verifyOtpLoading ? (
                     <ActivityIndicator color={COLORS.white} />
                   ) : (
-                    <Text style={styles.btnText}>Verify OTP</Text>
+                    <Text style={styles.btnText}>{t('Verify OTP')}</Text>
                   )}
                 </TouchableOpacity>
               </Animated.View>
 
               {/* Resend */}
               <View style={styles.resendRow}>
-                <Text style={styles.resendText}>Didn't receive code? </Text>
+                <Text style={styles.resendText}>{t("Didn't receive code? ")}</Text>
                 <TouchableOpacity onPress={handleResend}>
                   <Text style={[styles.resendLink, { color: roleColor }]}>
-                    Resend
+                    {t('Resend')}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -333,7 +337,7 @@ export default function VerifyMobileOtp({ route, navigation }) {
 
             {/* Footer */}
             <Text style={styles.footerNote}>
-              By continuing, you agree to our Terms & Privacy Policy
+              {t('By continuing, you agree to our Terms & Privacy Policy')}
             </Text>
           </ScrollView>
         </Animated.View>

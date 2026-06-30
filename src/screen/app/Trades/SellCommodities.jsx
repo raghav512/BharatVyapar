@@ -23,6 +23,7 @@ import { w, h, mw, f } from '../../../utils/responsive';
 import { showAlert } from '../../../components/CustomAlertBox';
 import KycBanner from '../../../components/KycBanner';
 import { useSellCommoditiesForm, IMAGE_MAX_SIZE_MB, UNIT_TO_PRICE_UNIT } from './hooks/useSellCommoditiesForm';
+import { useTranslation } from '../../../hook/useTranslation';
 
 const ROLE_THEMES = {
   FPO: { primary: COLORS.fpoPrimary, secondary: COLORS.fpoSecondary, light: COLORS.fpoLight, text: COLORS.fpoText },
@@ -34,6 +35,7 @@ const ROLE_THEMES = {
 
 
 const SelectorChip = ({ itemVal, isActive, theme, onPress }) => {
+  const { t } = useTranslation();
   return (
     <TouchableOpacity
       onPress={onPress}
@@ -44,7 +46,7 @@ const SelectorChip = ({ itemVal, isActive, theme, onPress }) => {
       activeOpacity={0.8}
       accessible={true}
       accessibilityRole="button"
-      accessibilityLabel={`Select unit ${itemVal}`}
+      accessibilityLabel={t('Select unit {unit}').replace('{unit}', itemVal)}
       accessibilityState={{ selected: isActive }}
     >
       <Text style={[styles.pickerChipText, isActive ? styles.activePickerChipText : styles.inactivePickerChipText]}>
@@ -55,6 +57,7 @@ const SelectorChip = ({ itemVal, isActive, theme, onPress }) => {
 };
 
 const PriceUnitChip = ({ itemVal, isActive, theme }) => {
+  const { t } = useTranslation();
   const isLocked = !isActive;
   return (
     <View
@@ -66,7 +69,7 @@ const PriceUnitChip = ({ itemVal, isActive, theme }) => {
       ]}
       accessible={true}
       accessibilityRole="text"
-      accessibilityLabel={`${itemVal} price unit${isLocked ? ', locked' : ''}`}
+      accessibilityLabel={t('{value} price unit{locked}').replace('{value}', itemVal).replace('{locked}', isLocked ? t(', locked') : '')}
     >
       <Text
         style={[
@@ -84,6 +87,7 @@ const PriceUnitChip = ({ itemVal, isActive, theme }) => {
 };
 
 export default function SellCommodities({ route, navigation }) {
+  const { t } = useTranslation();
   // PERFORMANCE FIX: Two granular selectors — SellCommodities only re-renders
   // when user or selectedRole change, not on profileLoading or other auth fields.
   // This is critical since this is a large form screen with many child inputs.
@@ -175,8 +179,8 @@ export default function SellCommodities({ route, navigation }) {
     <SafeScreen style={styles.container} top={false} bottom={false}>
       <AppHeader
         backgroundColor={theme.primary}
-        title={editItem ? 'Edit Sell Offer' : 'Post Sell Offer'}
-        subtitle={editItem ? 'Update crop stock details and republish' : 'Publish crop stock details to find buyers'}
+        title={editItem ? t('Edit Sell Offer') : t('Post Sell Offer')}
+        subtitle={editItem ? t('Update crop stock details and republish') : t('Publish crop stock details to find buyers')}
         showBackButton={false}
       />
 
@@ -193,12 +197,12 @@ export default function SellCommodities({ route, navigation }) {
           </View>
           <View style={styles.introTextContainer}>
             <Text style={[styles.introTitle, { color: theme.primary }]}>
-              {editItem ? "Editing Listing Mode" : "Direct Market Access"}
+              {editItem ? t("Editing Listing Mode") : t("Direct Market Access")}
             </Text>
             <Text style={styles.introDesc}>
               {editItem 
-                ? "Modifying active transaction terms. Updates will reflect immediately on the marketplace."
-                : "List your commodity to connect with verified buyers. Enable escrow safety for guaranteed payments."}
+                ? t("Modifying active transaction terms. Updates will reflect immediately on the marketplace.")
+                : t("List your commodity to connect with verified buyers. Enable escrow safety for guaranteed payments.")}
             </Text>
           </View>
         </View>
@@ -209,11 +213,11 @@ export default function SellCommodities({ route, navigation }) {
             <View style={[styles.sectionIconContainer, { backgroundColor: theme.primary + '10' }]}>
               <Icon name="corn" size={18} color={theme.primary} />
             </View>
-            <Text style={[styles.sectionHeading, { color: theme.primary }]}>Crop Specifications</Text>
+            <Text style={[styles.sectionHeading, { color: theme.primary }]}>{t('Crop Specifications')}</Text>
           </View>
 
           <View style={styles.formGroup}>
-            <Text style={styles.inputLabel}>Commodity Name *</Text>
+            <Text style={styles.inputLabel}>{t('Commodity Name *')}</Text>
             <TextInput
               style={[
                 styles.textInput,
@@ -221,18 +225,18 @@ export default function SellCommodities({ route, navigation }) {
               ]}
               value={commodityName}
               onChangeText={setCommodityName}
-              placeholder="e.g. Wheat, Soybean"
+              placeholder={t('e.g. Wheat, Soybean')}
               placeholderTextColor={COLORS.textMuted}
               onFocus={() => setFocusedField('commodityName')}
               onBlur={() => setFocusedField(null)}
               accessible={true}
-              accessibilityLabel="Commodity Name"
-              accessibilityHint="Enter the name of the crop, required"
+              accessibilityLabel={t('Commodity Name')}
+              accessibilityHint={t('Enter the name of the crop, required')}
             />
           </View>
 
           <View style={styles.formGroup}>
-            <Text style={styles.inputLabel}>Variety / Type</Text>
+            <Text style={styles.inputLabel}>{t('Variety / Type')}</Text>
             <TextInput
               style={[
                 styles.textInput,
@@ -240,18 +244,18 @@ export default function SellCommodities({ route, navigation }) {
               ]}
               value={type}
               onChangeText={setType}
-              placeholder="e.g. Lokwan, Desi"
+              placeholder={t('e.g. Lokwan, Desi')}
               placeholderTextColor={COLORS.textMuted}
               onFocus={() => setFocusedField('type')}
               onBlur={() => setFocusedField(null)}
               accessible={true}
-              accessibilityLabel="Variety or Type"
-              accessibilityHint="Enter the specific crop variety or type"
+              accessibilityLabel={t('Variety or Type')}
+              accessibilityHint={t('Enter the specific crop variety or type')}
             />
           </View>
 
           <View style={styles.formGroup}>
-            <Text style={styles.inputLabel}>Available Qty *</Text>
+            <Text style={styles.inputLabel}>{t('Available Qty *')}</Text>
             <TextInput
               style={[
                 styles.textInput,
@@ -259,19 +263,19 @@ export default function SellCommodities({ route, navigation }) {
               ]}
               value={quantity}
               onChangeText={setQuantity}
-              placeholder="e.g. 50"
+              placeholder={t('e.g. 50')}
               keyboardType="numeric"
               placeholderTextColor={COLORS.textMuted}
               onFocus={() => setFocusedField('quantity')}
               onBlur={() => setFocusedField(null)}
               accessible={true}
-              accessibilityLabel="Available Quantity"
-              accessibilityHint="Enter the numeric quantity of crop available, required"
+              accessibilityLabel={t('Available Quantity')}
+              accessibilityHint={t('Enter the numeric quantity of crop available, required')}
             />
           </View>
 
           <View style={styles.formGroup}>
-            <Text style={styles.inputLabel}>Unit</Text>
+            <Text style={styles.inputLabel}>{t('Unit')}</Text>
             <View style={styles.pickerRow}>
               {['Ton', 'Quintal', 'Kg'].map((u) => (
                 <SelectorChip
@@ -292,11 +296,11 @@ export default function SellCommodities({ route, navigation }) {
             <View style={[styles.sectionIconContainer, { backgroundColor: theme.primary + '10' }]}>
               <Icon name="currency-inr" size={18} color={theme.primary} />
             </View>
-            <Text style={[styles.sectionHeading, { color: theme.primary }]}>Pricing & Counter Bids</Text>
+            <Text style={[styles.sectionHeading, { color: theme.primary }]}>{t('Pricing & Counter Bids')}</Text>
           </View>
 
           <View style={styles.formGroup}>
-            <Text style={styles.inputLabel}>Expected Price *</Text>
+            <Text style={styles.inputLabel}>{t('Expected Price *')}</Text>
             <TextInput
               style={[
                 styles.textInput,
@@ -304,21 +308,21 @@ export default function SellCommodities({ route, navigation }) {
               ]}
               value={sellingPrice}
               onChangeText={setSellingPrice}
-              placeholder="e.g. 2400"
+              placeholder={t('e.g. 2400')}
               keyboardType="numeric"
               placeholderTextColor={COLORS.textMuted}
               onFocus={() => setFocusedField('sellingPrice')}
               onBlur={() => setFocusedField(null)}
               accessible={true}
-              accessibilityLabel="Expected Price"
-              accessibilityHint="Enter the expected selling price in rupees, required"
+              accessibilityLabel={t('Expected Price')}
+              accessibilityHint={t('Enter the expected selling price in rupees, required')}
             />
           </View>
 
           <View style={styles.formGroup}>
-            <Text style={styles.inputLabel}>Per Unit</Text>
+            <Text style={styles.inputLabel}>{t('Per Unit')}</Text>
             <Text style={[styles.inputHint, { color: theme.primary }]}>
-              Locked to quantity unit — change unit above to update
+              {t('Locked to quantity unit — change unit above to update')}
             </Text>
             <View style={styles.pickerRow}>
               {['Ton', 'Qt', 'Kg'].map((pu) => (
@@ -334,8 +338,8 @@ export default function SellCommodities({ route, navigation }) {
 
           <View style={styles.switchContainer}>
             <View style={styles.switchContent}>
-              <Text style={styles.switchLabel}>Allow Bidding / Counter Offers</Text>
-              <Text style={styles.switchDesc}>Permit buyers to negotiate transaction pricing</Text>
+              <Text style={styles.switchLabel}>{t('Allow Bidding / Counter Offers')}</Text>
+              <Text style={styles.switchDesc}>{t('Permit buyers to negotiate transaction pricing')}</Text>
             </View>
             <Switch
               value={isNegotiable}
@@ -343,18 +347,18 @@ export default function SellCommodities({ route, navigation }) {
               trackColor={{ false: '#E2E8F0', true: theme.primary + '80' }}
               thumbColor={isNegotiable ? theme.primary : '#F1F5F9'}
               accessible={true}
-              accessibilityLabel="Allow Bidding and Counter Offers"
-              accessibilityHint="Double tap to toggle whether buyers can negotiate pricing"
+              accessibilityLabel={t('Allow Bidding and Counter Offers')}
+              accessibilityHint={t('Double tap to toggle whether buyers can negotiate pricing')}
               accessibilityState={{ checked: isNegotiable }}
             />
           </View>
 
           {isNegotiable && (
             <View style={[styles.subConfigCard, { borderColor: theme.primary + '20', marginBottom: h(16) }]}>
-              <Text style={[styles.subConfigTitle, { color: theme.primary }]}>Bidding Parameters</Text>
+              <Text style={[styles.subConfigTitle, { color: theme.primary }]}>{t('Bidding Parameters')}</Text>
 
               <View style={styles.formGroup}>
-                <Text style={styles.inputLabel}>Min Price (₹)</Text>
+                <Text style={styles.inputLabel}>{t('Min Price (₹)')}</Text>
                 <TextInput
                   style={[
                     styles.textInput,
@@ -362,19 +366,19 @@ export default function SellCommodities({ route, navigation }) {
                   ]}
                   value={minimumAcceptablePrice}
                   onChangeText={setMinimumAcceptablePrice}
-                  placeholder="e.g. 2300"
+                  placeholder={t('e.g. 2300')}
                   keyboardType="numeric"
                   placeholderTextColor={COLORS.textMuted}
                   onFocus={() => setFocusedField('minimumAcceptablePrice')}
                   onBlur={() => setFocusedField(null)}
                   accessible={true}
-                  accessibilityLabel="Minimum Price"
-                  accessibilityHint="Enter the minimum acceptable negotiation price in rupees"
+                  accessibilityLabel={t('Minimum Price')}
+                  accessibilityHint={t('Enter the minimum acceptable negotiation price in rupees')}
                 />
               </View>
 
               <View style={styles.formGroup}>
-                <Text style={styles.inputLabel}>Max Negotiation Rounds</Text>
+                <Text style={styles.inputLabel}>{t('Max Negotiation Rounds')}</Text>
                 <TextInput
                   style={[
                     styles.textInput,
@@ -382,19 +386,19 @@ export default function SellCommodities({ route, navigation }) {
                   ]}
                   value={maxNegotiationRounds}
                   onChangeText={setMaxNegotiationRounds}
-                  placeholder="e.g. 5"
+                  placeholder={t('e.g. 5')}
                   keyboardType="numeric"
                   placeholderTextColor={COLORS.textMuted}
                   onFocus={() => setFocusedField('maxNegotiationRounds')}
                   onBlur={() => setFocusedField(null)}
                   accessible={true}
-                  accessibilityLabel="Maximum Negotiation Rounds"
-                  accessibilityHint="Enter the maximum rounds of counter bidding, between 1 and 20"
+                  accessibilityLabel={t('Maximum Negotiation Rounds')}
+                  accessibilityHint={t('Enter the maximum rounds of counter bidding, between 1 and 20')}
                 />
               </View>
 
               <View style={styles.formGroup}>
-                <Text style={styles.inputLabel}>Offer Expiry (Hours)</Text>
+                <Text style={styles.inputLabel}>{t('Offer Expiry (Hours)')}</Text>
                 <TextInput
                   style={[
                     styles.textInput,
@@ -402,14 +406,14 @@ export default function SellCommodities({ route, navigation }) {
                   ]}
                   value={offerExpiryHours}
                   onChangeText={setOfferExpiryHours}
-                  placeholder="e.g. 24"
+                  placeholder={t('e.g. 24')}
                   keyboardType="numeric"
                   placeholderTextColor={COLORS.textMuted}
                   onFocus={() => setFocusedField('offerExpiryHours')}
                   onBlur={() => setFocusedField(null)}
                   accessible={true}
-                  accessibilityLabel="Offer Expiry Hours"
-                  accessibilityHint="Enter the number of hours before counter bids expire, between 1 and 720"
+                  accessibilityLabel={t('Offer Expiry Hours')}
+                  accessibilityHint={t('Enter the number of hours before counter bids expire, between 1 and 720')}
                 />
               </View>
             </View>
@@ -422,11 +426,11 @@ export default function SellCommodities({ route, navigation }) {
             <View style={[styles.sectionIconContainer, { backgroundColor: theme.primary + '10' }]}>
               <Icon name="truck-delivery-outline" size={18} color={theme.primary} />
             </View>
-            <Text style={[styles.sectionHeading, { color: theme.primary }]}>Logistics & Fulfillment</Text>
+            <Text style={[styles.sectionHeading, { color: theme.primary }]}>{t('Logistics & Fulfillment')}</Text>
           </View>
 
           <View style={styles.formGroup}>
-            <Text style={styles.inputLabel}>Weight Basis</Text>
+            <Text style={styles.inputLabel}>{t('Weight Basis')}</Text>
             <View style={styles.pickerRow}>
               {['Net Weight', 'Gross Weight'].map((wType) => (
                 <SelectorChip
@@ -441,7 +445,7 @@ export default function SellCommodities({ route, navigation }) {
           </View>
 
           <View style={styles.formGroup}>
-            <Text style={styles.inputLabel}>Delivery Clause</Text>
+            <Text style={styles.inputLabel}>{t('Delivery Clause')}</Text>
             <View style={styles.pickerRow}>
               {['FOR', 'Ex-Warehouse'].map((dType) => (
                 <SelectorChip
@@ -461,7 +465,7 @@ export default function SellCommodities({ route, navigation }) {
 
           {deliveryType === 'EX_WAREHOUSE' && (
             <View style={styles.formGroup}>
-              <Text style={styles.inputLabel}>Pickup Warehouse Address *</Text>
+              <Text style={styles.inputLabel}>{t('Pickup Warehouse Address *')}</Text>
               <TextInput
                 style={[
                   styles.textInput,
@@ -469,19 +473,19 @@ export default function SellCommodities({ route, navigation }) {
                 ]}
                 value={exWarehouseAddress}
                 onChangeText={setExWarehouseAddress}
-                placeholder="Enter warehouse storage address"
+                placeholder={t('Enter warehouse storage address')}
                 placeholderTextColor={COLORS.textMuted}
                 onFocus={() => setFocusedField('exWarehouseAddress')}
                 onBlur={() => setFocusedField(null)}
                 accessible={true}
-                accessibilityLabel="Pickup Warehouse Address"
-                accessibilityHint="Enter the warehouse address, required for Ex-Warehouse delivery"
+                accessibilityLabel={t('Pickup Warehouse Address')}
+                accessibilityHint={t('Enter the warehouse address, required for Ex-Warehouse delivery')}
               />
             </View>
           )}
 
           <View style={styles.formGroup}>
-            <Text style={styles.inputLabel}>Stock Location *</Text>
+            <Text style={styles.inputLabel}>{t('Stock Location *')}</Text>
             <TextInput
               style={[
                 styles.textInput,
@@ -489,27 +493,27 @@ export default function SellCommodities({ route, navigation }) {
               ]}
               value={commodityLocation}
               onChangeText={setCommodityLocation}
-              placeholder="e.g. Indore, MP"
+              placeholder={t('e.g. Indore, MP')}
               placeholderTextColor={COLORS.textMuted}
               onFocus={() => setFocusedField('commodityLocation')}
               onBlur={() => setFocusedField(null)}
               accessible={true}
-              accessibilityLabel="Stock Location"
-              accessibilityHint="Enter the city or district where crop stock is currently stored, required"
+              accessibilityLabel={t('Stock Location')}
+              accessibilityHint={t('Enter the city or district where crop stock is currently stored, required')}
             />
           </View>
 
           <View style={styles.formGroup}>
-            <Text style={styles.inputLabel}>Listing Expiry Date *</Text>
+            <Text style={styles.inputLabel}>{t('Listing Expiry Date *')}</Text>
             {process.env.NODE_ENV === 'test' ? (
               <TextInput
                 style={styles.textInput}
                 value={listingEndDate}
                 onChangeText={setListingEndDate}
-                placeholder="e.g. YYYY-MM-DD"
+                placeholder={t('e.g. YYYY-MM-DD')}
                 placeholderTextColor={COLORS.textMuted}
                 accessible={true}
-                accessibilityLabel="Listing Expiry Date"
+                accessibilityLabel={t('Listing Expiry Date')}
               />
             ) : (
               <TouchableOpacity
@@ -525,11 +529,11 @@ export default function SellCommodities({ route, navigation }) {
                 activeOpacity={0.8}
                 accessible={true}
                 accessibilityRole="button"
-                accessibilityLabel="Listing Expiry Date"
-                accessibilityHint={`Currently set to ${listingEndDate || 'not set'}. Tap to select a future date.`}
+                accessibilityLabel={t('Listing Expiry Date')}
+                accessibilityHint={t('Currently set to {date}. Tap to select a future date.').replace('{date}', listingEndDate || t('not set'))}
               >
                 <Text style={[styles.dateText, !listingEndDate && styles.placeholderText]}>
-                  {listingEndDate || 'Select Expiry Date'}
+                  {listingEndDate || t('Select Expiry Date')}
                 </Text>
                 <Icon name="calendar-month-outline" size={20} color={COLORS.textMuted} />
               </TouchableOpacity>
@@ -537,7 +541,7 @@ export default function SellCommodities({ route, navigation }) {
           </View>
 
           <View style={styles.formGroup}>
-            <Text style={styles.inputLabel}>Billing Address</Text>
+            <Text style={styles.inputLabel}>{t('Billing Address')}</Text>
             <TextInput
               style={[
                 styles.textInput,
@@ -545,18 +549,18 @@ export default function SellCommodities({ route, navigation }) {
               ]}
               value={billingAddress}
               onChangeText={setBillingAddress}
-              placeholder="e.g. Indore Mandi Complex, MP"
+              placeholder={t('e.g. Indore Mandi Complex, MP')}
               placeholderTextColor={COLORS.textMuted}
               onFocus={() => setFocusedField('billingAddress')}
               onBlur={() => setFocusedField(null)}
               accessible={true}
-              accessibilityLabel="Billing Address"
-              accessibilityHint="Enter the billing address for the offer"
+              accessibilityLabel={t('Billing Address')}
+              accessibilityHint={t('Enter the billing address for the offer')}
             />
           </View>
 
           <View style={styles.formGroup}>
-            <Text style={styles.inputLabel}>Weight Tolerance (%)</Text>
+            <Text style={styles.inputLabel}>{t('Weight Tolerance (%)')}</Text>
             <TextInput
               style={[
                 styles.textInput,
@@ -564,19 +568,19 @@ export default function SellCommodities({ route, navigation }) {
               ]}
               value={weightTolerance}
               onChangeText={setWeightTolerance}
-              placeholder="e.g. 1"
+              placeholder={t('e.g. 1')}
               keyboardType="numeric"
               placeholderTextColor={COLORS.textMuted}
               onFocus={() => setFocusedField('weightTolerance')}
               onBlur={() => setFocusedField(null)}
               accessible={true}
-              accessibilityLabel="Weight Tolerance percentage"
-              accessibilityHint="Enter the weight tolerance percentage"
+              accessibilityLabel={t('Weight Tolerance percentage')}
+              accessibilityHint={t('Enter the weight tolerance percentage')}
             />
           </View>
 
           <View style={styles.formGroup}>
-            <Text style={styles.inputLabel}>Payment Release Clause</Text>
+            <Text style={styles.inputLabel}>{t('Payment Release Clause')}</Text>
             <TextInput
               style={[
                 styles.textInput,
@@ -584,13 +588,13 @@ export default function SellCommodities({ route, navigation }) {
               ]}
               value={paymentTimeline}
               onChangeText={setPaymentTimeline}
-              placeholder="e.g. Within 3 days of delivery"
+              placeholder={t('e.g. Within 3 days of delivery')}
               placeholderTextColor={COLORS.textMuted}
               onFocus={() => setFocusedField('paymentTimeline')}
               onBlur={() => setFocusedField(null)}
               accessible={true}
-              accessibilityLabel="Payment Release Clause"
-              accessibilityHint="Enter the timelines or terms for payment release"
+              accessibilityLabel={t('Payment Release Clause')}
+              accessibilityHint={t('Enter the timelines or terms for payment release')}
             />
           </View>
         </View>
@@ -601,14 +605,14 @@ export default function SellCommodities({ route, navigation }) {
             <View style={[styles.sectionIconContainer, { backgroundColor: theme.primary + '10' }]}>
               <Icon name="clipboard-check-outline" size={18} color={theme.primary} />
             </View>
-            <Text style={[styles.sectionHeading, { color: theme.primary }]}>Quality & Lab Assays</Text>
+            <Text style={[styles.sectionHeading, { color: theme.primary }]}>{t('Quality & Lab Assays')}</Text>
           </View>
 
-          <Text style={styles.subCardLabel}>Crop Quality Metrics</Text>
+          <Text style={styles.subCardLabel}>{t('Crop Quality Metrics')}</Text>
 
           {/* Static parameters form fields */}
           <View style={styles.formGroup}>
-            <Text style={styles.inputLabel}>Moisture Parameter (%)</Text>
+            <Text style={styles.inputLabel}>{t('Moisture Parameter (%)')}</Text>
             <TextInput
               style={[
                 styles.textInput,
@@ -616,19 +620,19 @@ export default function SellCommodities({ route, navigation }) {
               ]}
               value={moisture}
               onChangeText={setMoisture}
-              placeholder="e.g. 12"
+              placeholder={t('e.g. 12')}
               keyboardType="numeric"
               placeholderTextColor={COLORS.textMuted}
               onFocus={() => setFocusedField('moisture')}
               onBlur={() => setFocusedField(null)}
               accessible={true}
-              accessibilityLabel="Moisture percentage"
-              accessibilityHint="Enter the crop moisture percentage, value must be between 0 and 100"
+              accessibilityLabel={t('Moisture percentage')}
+              accessibilityHint={t('Enter the crop moisture percentage, value must be between 0 and 100')}
             />
           </View>
 
           <View style={styles.formGroup}>
-            <Text style={styles.inputLabel}>Foreign Material (%)</Text>
+            <Text style={styles.inputLabel}>{t('Foreign Material (%)')}</Text>
             <TextInput
               style={[
                 styles.textInput,
@@ -636,19 +640,19 @@ export default function SellCommodities({ route, navigation }) {
               ]}
               value={foreignMaterial}
               onChangeText={setForeignMaterial}
-              placeholder="e.g. 1"
+              placeholder={t('e.g. 1')}
               keyboardType="numeric"
               placeholderTextColor={COLORS.textMuted}
               onFocus={() => setFocusedField('foreignMaterial')}
               onBlur={() => setFocusedField(null)}
               accessible={true}
-              accessibilityLabel="Foreign Material percentage"
-              accessibilityHint="Enter the percentage of foreign material, value must be between 0 and 100"
+              accessibilityLabel={t('Foreign Material percentage')}
+              accessibilityHint={t('Enter the percentage of foreign material, value must be between 0 and 100')}
             />
           </View>
 
           <View style={styles.formGroup}>
-            <Text style={styles.inputLabel}>Broken / Damaged (%)</Text>
+            <Text style={styles.inputLabel}>{t('Broken / Damaged (%)')}</Text>
             <TextInput
               style={[
                 styles.textInput,
@@ -656,14 +660,14 @@ export default function SellCommodities({ route, navigation }) {
               ]}
               value={broken}
               onChangeText={setBroken}
-              placeholder="e.g. 2"
+              placeholder={t('e.g. 2')}
               keyboardType="numeric"
               placeholderTextColor={COLORS.textMuted}
               onFocus={() => setFocusedField('broken')}
               onBlur={() => setFocusedField(null)}
               accessible={true}
-              accessibilityLabel="Broken percentage"
-              accessibilityHint="Enter the percentage of broken or damaged grains, value must be between 0 and 100"
+              accessibilityLabel={t('Broken percentage')}
+              accessibilityHint={t('Enter the percentage of broken or damaged grains, value must be between 0 and 100')}
             />
           </View>
 
@@ -673,7 +677,7 @@ export default function SellCommodities({ route, navigation }) {
               {customQualityParams.map((param, index) => (
                 <View key={index} style={[styles.customParamRow, { borderColor: theme.primary + '30' }]}>
                   <View style={styles.customParamInfo}>
-                    <Text style={styles.customParamName}>{param.name}</Text>
+                    <Text style={styles.customParamName}>{t(param.name)}</Text>
                     <Text style={[styles.customParamValue, { color: theme.primary }]}>{param.value}%</Text>
                   </View>
                   <TouchableOpacity
@@ -683,7 +687,7 @@ export default function SellCommodities({ route, navigation }) {
                     style={styles.customParamDeleteBtn}
                     accessible={true}
                     accessibilityRole="button"
-                    accessibilityLabel={`Delete custom parameter ${param.name}`}
+                    accessibilityLabel={t('Delete custom parameter {param}').replace('{param}', t(param.name))}
                   >
                     <Icon name="close-circle-outline" size={20} color={COLORS.error || '#EF4444'} />
                   </TouchableOpacity>
@@ -708,11 +712,11 @@ export default function SellCommodities({ route, navigation }) {
             activeOpacity={0.8}
             accessible={true}
             accessibilityRole="button"
-            accessibilityLabel="Add custom quality parameters"
-            accessibilityHint="Double tap to open custom parameters dialog"
+            accessibilityLabel={t('Add custom quality parameters')}
+            accessibilityHint={t('Double tap to open custom parameters dialog')}
           >
             <Icon name="plus" size={18} color={theme.primary} />
-            <Text style={[styles.addMoreBtnText, { color: theme.primary }]}>Add More Parameters</Text>
+            <Text style={[styles.addMoreBtnText, { color: theme.primary }]}>{t('Add More Parameters')}</Text>
           </TouchableOpacity>
 
           {/* Upload Cards */}
@@ -727,14 +731,14 @@ export default function SellCommodities({ route, navigation }) {
               activeOpacity={0.7}
               accessible={true}
               accessibilityRole="button"
-              accessibilityLabel={`Crop Images. ${commodityImages.length} of 3 added.`}
-              accessibilityHint="Double tap to choose images from gallery"
+              accessibilityLabel={t('Crop Images. {count} of 3 added.').replace('{count}', commodityImages.length)}
+              accessibilityHint={t('Double tap to choose images from gallery')}
             >
               <Icon name="camera-plus-outline" size={24} color={theme.primary} />
               <Text style={[styles.uploadCardText, { color: theme.primary }]}>
-                Crop Images {commodityImages.length > 0 ? `(${commodityImages.length}/3)` : ''}
+                {t('Crop Images')} {commodityImages.length > 0 ? `(${commodityImages.length}/3)` : ''}
               </Text>
-              <Text style={styles.uploadCardHint}>Max {IMAGE_MAX_SIZE_MB}MB (PNG/JPG)</Text>
+              <Text style={styles.uploadCardHint}>{t('Max {size}MB (PNG/JPG)').replace('{size}', IMAGE_MAX_SIZE_MB)}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -747,38 +751,38 @@ export default function SellCommodities({ route, navigation }) {
               activeOpacity={0.7}
               accessible={true}
               accessibilityRole="button"
-              accessibilityLabel={`Quality Reports. ${qualityReport.length} reports added.`}
-              accessibilityHint="Double tap to pick PDF documents"
+              accessibilityLabel={t('Quality Reports. {count} reports added.').replace('{count}', qualityReport.length)}
+              accessibilityHint={t('Double tap to pick PDF documents')}
             >
               <Icon name="file-pdf-box" size={24} color={theme.primary} />
-              <Text style={[styles.uploadCardText, { color: theme.primary }]}>Quality Reports</Text>
-              <Text style={styles.uploadCardHint}>Add PDF lab reports</Text>
+              <Text style={[styles.uploadCardText, { color: theme.primary }]}>{t('Quality Reports')}</Text>
+              <Text style={styles.uploadCardHint}>{t('Add PDF lab reports')}</Text>
             </TouchableOpacity>
           </View>
 
           {/* Image Thumbnails Previews */}
           {commodityImages.length > 0 && (
             <View style={styles.thumbnailContainer}>
-              <Text style={styles.previewHeading}>Selected Images ({commodityImages.length})</Text>
+              <Text style={styles.previewHeading}>{t('Selected Images ({count})').replace('{count}', commodityImages.length)}</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.thumbnailList}>
                 {commodityImages.map((img, index) => (
                   <View key={index} style={styles.thumbnailWrapper}>
                     <Image source={{ uri: img.uri || img.url }} style={styles.thumbnail} />
                      <TouchableOpacity
-                      style={styles.thumbnailClose}
-                      onPress={() => {
-                        const target = img;
-                        if (target.url || target.key) {
-                          setDeletedImages(prev => [...prev, target.key || target.url]);
-                        }
-                        setCommodityImages(commodityImages.filter((_, i) => i !== index));
-                      }}
-                      accessible={true}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Remove selected image ${index + 1}`}
-                    >
-                      <Icon name="close" size={11} color={COLORS.white} />
-                    </TouchableOpacity>
+                       style={styles.thumbnailClose}
+                       onPress={() => {
+                         const target = img;
+                         if (target.url || target.key) {
+                           setDeletedImages(prev => [...prev, target.key || target.url]);
+                         }
+                         setCommodityImages(commodityImages.filter((_, i) => i !== index));
+                       }}
+                       accessible={true}
+                       accessibilityRole="button"
+                       accessibilityLabel={t('Remove selected image {index}').replace('{index}', index + 1)}
+                     >
+                       <Icon name="close" size={11} color={COLORS.white} />
+                     </TouchableOpacity>
                   </View>
                 ))}
               </ScrollView>
@@ -788,7 +792,7 @@ export default function SellCommodities({ route, navigation }) {
           {/* PDF Files Previews */}
           {qualityReport.length > 0 && (
             <View style={styles.reportContainer}>
-              <Text style={styles.previewHeading}>Selected Reports ({qualityReport.length})</Text>
+              <Text style={styles.previewHeading}>{t('Selected Reports ({count})').replace('{count}', qualityReport.length)}</Text>
               {qualityReport.map((doc, index) => (
                 <View key={index} style={styles.reportCard}>
                   <Icon name="file-pdf-box" size={22} color="#E53E3E" />
@@ -806,7 +810,7 @@ export default function SellCommodities({ route, navigation }) {
                     style={styles.reportDelete}
                     accessible={true}
                     accessibilityRole="button"
-                    accessibilityLabel={`Remove report ${doc.name || 'document'}`}
+                    accessibilityLabel={t('Remove report {name}').replace('{name}', doc.name || t('document'))}
                   >
                     <Icon name="trash-can-outline" size={16} color={COLORS.error} />
                   </TouchableOpacity>
@@ -815,7 +819,7 @@ export default function SellCommodities({ route, navigation }) {
             </View>
           )}
 
-          <Text style={styles.inputLabel}>Additional Remarks or Special Terms</Text>
+          <Text style={styles.inputLabel}>{t('Additional Remarks or Special Terms')}</Text>
           <TextInput
             style={[
               styles.textInput,
@@ -825,13 +829,13 @@ export default function SellCommodities({ route, navigation }) {
             multiline
             value={remarks}
             onChangeText={setRemarks}
-            placeholder="Moisture standards, packing material quality, loading timeline constraints..."
+            placeholder={t('Moisture standards, packing material quality, loading timeline constraints...')}
             placeholderTextColor={COLORS.textMuted}
             onFocus={() => setFocusedField('remarks')}
             onBlur={() => setFocusedField(null)}
             accessible={true}
-            accessibilityLabel="Additional Remarks or Special Terms"
-            accessibilityHint="Enter any additional remarks or details for the listing"
+            accessibilityLabel={t('Additional Remarks or Special Terms')}
+            accessibilityHint={t('Enter any additional remarks or details for the listing')}
           />
         </View>
 
@@ -843,8 +847,8 @@ export default function SellCommodities({ route, navigation }) {
           activeOpacity={0.85}
           accessible={true}
           accessibilityRole="button"
-          accessibilityLabel={submitting ? "Submitting Offer" : (editItem ? "Update Sell Offer" : "Publish Sell Offer")}
-          accessibilityHint={editItem ? "Double tap to submit your listing updates" : "Double tap to publish your listing to the marketplace"}
+          accessibilityLabel={submitting ? t('Submitting Offer') : (editItem ? t('Update Sell Offer') : t('Publish Sell Offer'))}
+          accessibilityHint={editItem ? t('Double tap to submit your listing updates') : t('Double tap to publish your listing to the marketplace')}
         >
           {submitting ? (
             <ActivityIndicator color={COLORS.white} size="small" />
@@ -852,7 +856,7 @@ export default function SellCommodities({ route, navigation }) {
             <View style={styles.submitBtnRow}>
               <Icon name="cloud-upload-outline" size={20} color={COLORS.white} />
               <Text style={styles.submitBtnText}>
-                {editItem ? "Update Sell Listing" : "Publish Sell Listing"}
+                {editItem ? t('Update Sell Listing') : t('Publish Sell Listing')}
               </Text>
             </View>
           )}
@@ -869,10 +873,10 @@ export default function SellCommodities({ route, navigation }) {
             activeOpacity={0.8}
             accessible={true}
             accessibilityRole="button"
-            accessibilityLabel="Cancel editing offer"
-            accessibilityHint="Double tap to revert updates and go back"
+            accessibilityLabel={t('Cancel editing offer')}
+            accessibilityHint={t('Double tap to revert updates and go back')}
           >
-            <Text style={[styles.cancelEditBtnText, { color: theme.primary }]}>Cancel Edit</Text>
+            <Text style={[styles.cancelEditBtnText, { color: theme.primary }]}>{t('Cancel Edit')}</Text>
           </TouchableOpacity>
         )}
 
@@ -914,12 +918,12 @@ export default function SellCommodities({ route, navigation }) {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={[styles.modalTitle, { color: theme.primary }]}>Add Quality Parameters</Text>
+            <Text style={[styles.modalTitle, { color: theme.primary }]}>{t('Add Quality Parameters')}</Text>
 
             {/* Currently Added Parameters list inside the Modal */}
             {customQualityParams.length > 0 && (
               <View style={styles.modalParamsList}>
-                <Text style={styles.modalLabel}>Added Parameters ({customQualityParams.length}):</Text>
+                <Text style={styles.modalLabel}>{t('Added Parameters ({count})').replace('{count}', String(customQualityParams.length))}</Text>
                 <ScrollView 
                   style={{ maxHeight: h(100) }} 
                   contentContainerStyle={styles.modalParamsChips}
@@ -928,7 +932,7 @@ export default function SellCommodities({ route, navigation }) {
                   {customQualityParams.map((param, index) => (
                     <View key={index} style={[styles.modalAddedParamChip, { borderColor: theme.primary + '30', backgroundColor: theme.primary + '08' }]}>
                       <Text style={styles.modalAddedParamText}>
-                        {param.name}: <Text style={[styles.modalAddedParamVal, { color: theme.primary }]}>{param.value}%</Text>
+                        {t(param.name)}: <Text style={[styles.modalAddedParamVal, { color: theme.primary }]}>{param.value}%</Text>
                       </Text>
                       <TouchableOpacity
                         onPress={() => {
@@ -937,7 +941,7 @@ export default function SellCommodities({ route, navigation }) {
                         style={styles.modalAddedParamDelete}
                         accessible={true}
                         accessibilityRole="button"
-                        accessibilityLabel={`Delete custom parameter ${param.name}`}
+                        accessibilityLabel={t('Delete custom parameter {name}').replace('{name}', t(param.name))}
                       >
                         <Icon name="close" size={13} color={COLORS.error || '#EF4444'} />
                       </TouchableOpacity>
@@ -947,7 +951,7 @@ export default function SellCommodities({ route, navigation }) {
               </View>
             )}
 
-            <Text style={styles.modalLabel}>Select Pre-defined Parameter</Text>
+            <Text style={styles.modalLabel}>{t('Select Pre-defined Parameter')}</Text>
             <View style={styles.modalChipsRow}>
               {[
                 'Insect damage / infestation',
@@ -957,6 +961,7 @@ export default function SellCommodities({ route, navigation }) {
                 'Discolouration'
               ].map((opt) => {
                 const isSelected = modalParamName === opt;
+                const optText = t(opt);
                 return (
                   <TouchableOpacity
                     key={opt}
@@ -969,7 +974,7 @@ export default function SellCommodities({ route, navigation }) {
                     ]}
                     accessible={true}
                     accessibilityRole="button"
-                    accessibilityLabel={opt}
+                    accessibilityLabel={optText}
                     accessibilityState={{ selected: isSelected }}
                   >
                     <Text
@@ -978,26 +983,26 @@ export default function SellCommodities({ route, navigation }) {
                         isSelected ? { color: COLORS.white } : { color: COLORS.textLight },
                       ]}
                     >
-                      {opt}
+                      {optText}
                     </Text>
                   </TouchableOpacity>
                 );
               })}
             </View>
 
-            <Text style={styles.modalLabel}>Or Enter Custom Name</Text>
+            <Text style={styles.modalLabel}>{t('Or Enter Custom Name')}</Text>
             <TextInput
               style={styles.modalInput}
-              placeholder="e.g. Density, Oil Content"
+              placeholder={t('e.g. Density, Oil Content')}
               placeholderTextColor={COLORS.textMuted}
               value={modalParamName}
               onChangeText={setModalParamName}
               accessible={true}
-              accessibilityLabel="Custom Parameter Name"
-              accessibilityHint="Type custom quality parameter name here"
+              accessibilityLabel={t('Custom Parameter Name')}
+              accessibilityHint={t('Type custom quality parameter name here')}
             />
 
-            <Text style={styles.modalLabel}>Value (%)</Text>
+            <Text style={styles.modalLabel}>{t('Value (%)')}</Text>
             <TextInput
               style={styles.modalInput}
               placeholder="e.g. 5"
@@ -1006,8 +1011,8 @@ export default function SellCommodities({ route, navigation }) {
               value={modalParamValue}
               onChangeText={setModalParamValue}
               accessible={true}
-              accessibilityLabel="Parameter Value percentage"
-              accessibilityHint="Enter percentage value for the custom parameter"
+              accessibilityLabel={t('Parameter Value percentage')}
+              accessibilityHint={t('Enter percentage value for the custom parameter')}
             />
 
             <View style={styles.modalBtnRow}>
@@ -1016,9 +1021,9 @@ export default function SellCommodities({ route, navigation }) {
                 onPress={() => setIsModalVisible(false)}
                 accessible={true}
                 accessibilityRole="button"
-                accessibilityLabel="Done and Close modal"
+                accessibilityLabel={t('Done and Close modal')}
               >
-                <Text style={styles.modalCancelBtnText}>Done / Close</Text>
+                <Text style={styles.modalCancelBtnText}>{t('Done / Close')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalBtn, { backgroundColor: theme.primary }]}
@@ -1028,16 +1033,16 @@ export default function SellCommodities({ route, navigation }) {
                   if (!name) {
                     showAlert({
                       type: 'warning',
-                      title: 'Missing Field',
-                      message: 'Please select or enter a parameter name.',
+                      title: t('Missing Field'),
+                      message: t('Please select or enter a parameter name.'),
                     });
                     return;
                   }
                   if (!val || isNaN(Number(val)) || Number(val) < 0 || Number(val) > 100) {
                     showAlert({
                       type: 'warning',
-                      title: 'Invalid Value',
-                      message: 'Please enter a valid percentage value between 0 and 100.',
+                      title: t('Invalid Value'),
+                      message: t('Please enter a valid percentage value between 0 and 100.'),
                     });
                     return;
                   }
@@ -1051,8 +1056,8 @@ export default function SellCommodities({ route, navigation }) {
                   ) {
                     showAlert({
                       type: 'warning',
-                      title: 'Duplicate Parameter',
-                      message: 'This parameter already exists.',
+                      title: t('Duplicate Parameter'),
+                      message: t('This parameter already exists.'),
                     });
                     return;
                   }
@@ -1064,10 +1069,10 @@ export default function SellCommodities({ route, navigation }) {
                 }}
                 accessible={true}
                 accessibilityRole="button"
-                accessibilityLabel="Add parameter"
-                accessibilityHint="Double tap to save this parameter to list"
+                accessibilityLabel={t('Add parameter')}
+                accessibilityHint={t('Double tap to save this parameter to list')}
               >
-                <Text style={styles.modalAddBtnText}>Add Parameter</Text>
+                <Text style={styles.modalAddBtnText}>{t('Add Parameter')}</Text>
               </TouchableOpacity>
             </View>
           </View>

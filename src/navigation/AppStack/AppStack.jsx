@@ -11,9 +11,11 @@ import DealDetailsScreen from '../../screen/app/Trades/DealDetailsScreen';
 
 const Stack = createNativeStackNavigator();
 
+const SCREEN_OPTIONS = { headerShown: false };
+
 export default function AppStack() {
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Navigator screenOptions={SCREEN_OPTIONS}>
       <Stack.Screen name="MainTabs" component={AppTabs} />
       <Stack.Screen name="WarehouseScreen" component={WarehouseScreen} />
       <Stack.Screen name="FinanceScreen" component={FinanceScreen} />

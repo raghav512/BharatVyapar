@@ -7,6 +7,7 @@ import { setSelectedRole as setSelectedRoleAction } from '../../store/authSlice'
 import { w, h, mw, f } from '../../utils/responsive';
 import COLORS from '../../constant/colors';
 import Images from '../../assets';
+import { useTranslation } from '../../hook/useTranslation';
 
 const ROLES = [
   {
@@ -65,6 +66,7 @@ const ROLES = [
 
 export default function RoleSelectionScreen({ navigation }) {
   const dispatch = useDispatch();
+  const { t } = useTranslation();
   const [selectedRole, setSelectedRole] = useState(null);
 
   const selectedRoleData = ROLES.find(r => r.id === selectedRole);
@@ -89,9 +91,9 @@ export default function RoleSelectionScreen({ navigation }) {
         </View>
 
         <View style={styles.contentContainer}>
-          <Text style={styles.title}>Welcome to Bharat FPO Vyapar</Text>
+          <Text style={styles.title}>{t('Welcome to Bharat FPO Vyapar')}</Text>
           <Text style={styles.subtitle}>
-            Select your role to personalize your experience
+            {t('Select your role to personalize your experience')}
           </Text>
 
           {ROLES.map(role => {
@@ -128,9 +130,9 @@ export default function RoleSelectionScreen({ navigation }) {
                   <Text
                     style={[styles.roleTitle, { color: role.theme.titleColor }]}
                   >
-                    {role.title}
+                    {t(role.title)}
                   </Text>
-                  <Text style={styles.roleSubtitle}>{role.subtitle}</Text>
+                  <Text style={styles.roleSubtitle}>{t(role.subtitle)}</Text>
                 </View>
 
                 <Icon
@@ -151,7 +153,7 @@ export default function RoleSelectionScreen({ navigation }) {
             disabled={!selectedRole}
             onPress={handleContinue}
           >
-            <Text style={styles.continueText}>Continue</Text>
+            <Text style={styles.continueText}>{t('Continue')}</Text>
             <Icon
               name="arrow-right"
               size={f(20)}

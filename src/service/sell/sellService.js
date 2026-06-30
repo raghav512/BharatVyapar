@@ -1,7 +1,5 @@
 import { createSellCommodity, updateSellCommodity } from './sellCommodity';
 
-const IMAGE_MAX_SIZE_MB = 5;
-const IMAGE_MAX_SIZE_BYTES = IMAGE_MAX_SIZE_MB * 1024 * 1024;
 
 const createValidationError = (message, title = 'Submission Failed') => {
   const err = new Error(message);
@@ -152,9 +150,6 @@ export const submitSellListing = async (state, editItem, signal) => {
   if (Array.isArray(state.commodityImages)) {
     for (const img of state.commodityImages) {
       if (!img?.uri) continue;
-      if (img.fileSize && img.fileSize > IMAGE_MAX_SIZE_BYTES) {
-        throw createValidationError(`"${img.fileName || 'An image'}" exceeds the ${IMAGE_MAX_SIZE_MB} MB limit.`, 'Image Too Large');
-      }
       formData.append('commodityImages', {
         uri: img.uri,
         type: img.type || 'image/jpeg',

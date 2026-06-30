@@ -3,6 +3,7 @@ import React, {
   forwardRef,
   useRef,
   useState,
+  useEffect,
 } from 'react';
 import {
   Modal,
@@ -81,6 +82,18 @@ const CustomAlertInner = forwardRef((_, ref) => {
 
   const scaleAnim = useRef(new Animated.Value(0.8)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
+  // Track the running composite animation so we can stop it on unmount
+  // and prevent dangling AnimatedEvent bridge listeners (AnimatedEvent.js:81 leak)
+  const animRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      // Synchronously detach any pending native-driver listeners
+      animRef.current?.stop();
+      scaleAnim.stopAnimation();
+      opacityAnim.stopAnimation();
+    };
+  }, []);
 
   useImperativeHandle(ref, () => ({
     show(options) {
@@ -94,7 +107,7 @@ const CustomAlertInner = forwardRef((_, ref) => {
             : [{ text: 'OK', style: 'default' }],
       });
       setVisible(true);
-      Animated.parallel([
+      animRef.current = Animated.parallel([
         Animated.spring(scaleAnim, {
           toValue: 1,
           useNativeDriver: true,
@@ -106,12 +119,13 @@ const CustomAlertInner = forwardRef((_, ref) => {
           duration: 200,
           useNativeDriver: true,
         }),
-      ]).start();
+      ]);
+      animRef.current.start();
     },
   }));
 
   const handleClose = btn => {
-    Animated.parallel([
+    animRef.current = Animated.parallel([
       Animated.timing(scaleAnim, {
         toValue: 0.8,
         duration: 150,
@@ -122,7 +136,8 @@ const CustomAlertInner = forwardRef((_, ref) => {
         duration: 150,
         useNativeDriver: true,
       }),
-    ]).start(() => {
+    ]);
+    animRef.current.start(() => {
       setVisible(false);
       scaleAnim.setValue(0.8);
       opacityAnim.setValue(0);

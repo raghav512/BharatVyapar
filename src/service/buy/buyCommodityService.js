@@ -1,170 +1,87 @@
 import api from '../api';
+import { normalizeCommodity, normalizeCommodityList } from '../normalizers/commodity.normalizer';
+import { normalizeOffer, normalizeOfferList } from '../normalizers/offer.normalizer';
 
 const BASE_URL = '/buy-commodity';
 
 /**
  * Submit initial offer on a commodity listing
- * Method: POST
- * Route: /api/buy-commodity/offers
- * @param {Object} offerData
- * Fields: commodityId, price, priceUnit, quantity, unit, tradeType, paymentTimeline, remarks
+ * POST /api/buy-commodity/offers
  */
 export const submitOffer = async (offerData) => {
-  console.log('[API] submitOffer called with:', offerData);
-  try {
-    const response = await api.post(`${BASE_URL}/offers`, offerData);
-    console.log('[API] submitOffer success:', response.data);
-    return response.data;
-  } catch (error) {
-    console.warn('[API] submitOffer error:', error);
-    throw error;
-  }
+  const response = await api.post(`${BASE_URL}/offers`, offerData);
+  return normalizeOffer(response.data?.offer || response.data?.data || response.data);
 };
 
 /**
- * Fetch offers submitted by the current buyer, with optional filters
- * Method: GET
- * Route: /api/buy-commodity/offers
- * @param {Object} params - Query parameters (status, commodityId, page, limit)
+ * Fetch offers submitted by the current buyer
+ * GET /api/buy-commodity/offers
  */
 export const getOffers = async (params) => {
-  console.log('[API] getOffers called with params:', params);
-  try {
-    const response = await api.get(`${BASE_URL}/offers`, { params });
-    console.log('[API] getOffers success:', response.data);
-    return response.data;
-  } catch (error) {
-    console.warn('[API] getOffers error:', error);
-    throw error;
-  }
+  const response = await api.get(`${BASE_URL}/offers`, { params });
+  return normalizeOfferList(response.data);
 };
 
 /**
  * Fetch all offers received for a specific commodity listing (Seller view)
- * Method: GET
- * Route: /api/buy-commodity/offers/received/:commodityId
- * @param {string} commodityId
+ * GET /api/buy-commodity/offers/received/:commodityId
  */
 export const getReceivedOffers = async (commodityId) => {
-  console.log(`[API] getReceivedOffers called for commodityId: ${commodityId}`);
-  try {
-    const response = await api.get(`${BASE_URL}/offers/received/${commodityId}`);
-    console.log('[API] getReceivedOffers success:', response.data);
-    return response.data;
-  } catch (error) {
-    console.warn('[API] getReceivedOffers error:', error);
-    throw error;
-  }
+  const response = await api.get(`${BASE_URL}/offers/received/${commodityId}`);
+  return normalizeOfferList(response.data);
 };
 
 /**
- * Fetch offer details along with full negotiation history
- * Method: GET
- * Route: /api/buy-commodity/offers/:id
- * @param {string} offerId
+ * Fetch offer details with full negotiation history
+ * GET /api/buy-commodity/offers/:id
  */
 export const getOfferDetails = async (offerId) => {
-  console.log(`[API] getOfferDetails called for id: ${offerId}`);
-  try {
-    const response = await api.get(`${BASE_URL}/offers/${offerId}`);
-    console.log('[API] getOfferDetails success:', response.data);
-    return response.data;
-  } catch (error) {
-    console.warn('[API] getOfferDetails error:', error);
-    throw error;
-  }
+  const response = await api.get(`${BASE_URL}/offers/${offerId}`);
+  return normalizeOffer(response.data?.offer || response.data?.data || response.data);
 };
 
 /**
  * Submit counter offer
- * Method: POST
- * Route: /api/buy-commodity/offers/:id/counter
- * @param {string} offerId
- * @param {Object} counterData
- * Fields: price, quantity, remarks, isFinalOffer
+ * POST /api/buy-commodity/offers/:id/counter
  */
 export const submitCounterOffer = async (offerId, counterData) => {
-  console.log(`[API] submitCounterOffer called for offerId: ${offerId} with data:`, counterData);
-  try {
-    const response = await api.post(`${BASE_URL}/offers/${offerId}/counter`, counterData);
-    console.log('[API] submitCounterOffer success:', response.data);
-    return response.data;
-  } catch (error) {
-    console.warn('[API] submitCounterOffer error:', error);
-    throw error;
-  }
+  const response = await api.post(`${BASE_URL}/offers/${offerId}/counter`, counterData);
+  return normalizeOffer(response.data?.offer || response.data?.data || response.data);
 };
 
 /**
  * Accept negotiation offer
- * Method: POST
- * Route: /api/buy-commodity/offers/:id/accept
- * @param {string} offerId
+ * POST /api/buy-commodity/offers/:id/accept
  */
 export const acceptOffer = async (offerId) => {
-  console.log(`[API] acceptOffer called for offerId: ${offerId}`);
-  try {
-    const response = await api.post(`${BASE_URL}/offers/${offerId}/accept`);
-    console.log('[API] acceptOffer success:', response.data);
-    return response.data;
-  } catch (error) {
-    console.warn('[API] acceptOffer error:', error);
-    throw error;
-  }
+  const response = await api.post(`${BASE_URL}/offers/${offerId}/accept`);
+  return normalizeOffer(response.data?.offer || response.data?.data || response.data);
 };
 
 /**
  * Reject negotiation offer
- * Method: POST
- * Route: /api/buy-commodity/offers/:id/reject
- * @param {string} offerId
- * @param {Object} rejectData - Fields: reason
+ * POST /api/buy-commodity/offers/:id/reject
  */
 export const rejectOffer = async (offerId, rejectData) => {
-  console.log(`[API] rejectOffer called for offerId: ${offerId} with data:`, rejectData);
-  try {
-    const response = await api.post(`${BASE_URL}/offers/${offerId}/reject`, rejectData);
-    console.log('[API] rejectOffer success:', response.data);
-    return response.data;
-  } catch (error) {
-    console.warn('[API] rejectOffer error:', error);
-    throw error;
-  }
+  const response = await api.post(`${BASE_URL}/offers/${offerId}/reject`, rejectData);
+  return normalizeOffer(response.data?.offer || response.data?.data || response.data);
 };
 
 /**
  * Get details of an Escrow Deal
- * Method: GET
- * Route: /api/buy-commodity/deals/:dealId
- * @param {string} dealId
+ * GET /api/buy-commodity/deals/:dealId
  */
 export const getDealDetails = async (dealId) => {
-  console.log(`[API] getDealDetails called for dealId: ${dealId}`);
-  try {
-    const response = await api.get(`${BASE_URL}/deals/${dealId}`);
-    console.log('[API] getDealDetails success:', response.data);
-    return response.data;
-  } catch (error) {
-    console.warn('[API] getDealDetails error:', error);
-    throw error;
-  }
+  const response = await api.get(`${BASE_URL}/deals/${dealId}`);
+  // Deal is a different entity — return raw but unwrapped (no normalizer yet)
+  return response.data?.deal || response.data?.data || response.data;
 };
 
 /**
  * Update the Escrow/Payment status of a deal
- * Method: PATCH
- * Route: /api/buy-commodity/deals/:dealId/escrow
- * @param {string} dealId
- * @param {string} escrowStatus
+ * PATCH /api/buy-commodity/deals/:dealId/escrow
  */
 export const updateEscrowStatus = async (dealId, escrowStatus) => {
-  console.log(`[API] updateEscrowStatus called for dealId: ${dealId} with status: ${escrowStatus}`);
-  try {
-    const response = await api.patch(`${BASE_URL}/deals/${dealId}/escrow`, { escrowStatus });
-    console.log('[API] updateEscrowStatus success:', response.data);
-    return response.data;
-  } catch (error) {
-    console.warn('[API] updateEscrowStatus error:', error);
-    throw error;
-  }
+  const response = await api.patch(`${BASE_URL}/deals/${dealId}/escrow`, { escrowStatus });
+  return response.data;
 };

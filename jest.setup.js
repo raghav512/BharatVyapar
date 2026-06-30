@@ -194,3 +194,22 @@ try {
   console.warn('Failed to mock InteractionManager:', e);
 }
 
+// Mock requestIdleCallback and cancelIdleCallback globally for Jest
+global.requestIdleCallback = (callback) => {
+  if (typeof callback === 'function') {
+    callback();
+  }
+  return 1;
+};
+global.cancelIdleCallback = () => {};
+
+// Mock useTranslation globally
+jest.mock('./src/hook/useTranslation', () => ({
+  useTranslation: () => ({
+    t: (str) => str || '',
+    currentLanguage: 'en',
+  }),
+}));
+
+
+

@@ -12,6 +12,7 @@ import {
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import COLORS from '../../../../../constant/colors';
 import { w, h, f } from '../../../../../utils/responsive';
+import { useTranslation } from '../../../../../hook/useTranslation';
 
 export default function PlaceBuyOfferModal({
   visible,
@@ -31,12 +32,13 @@ export default function PlaceBuyOfferModal({
   submittingOffer,
   handlePlaceOffer,
 }) {
+  const { t } = useTranslation();
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.modalOverlay}>
         <View style={styles.modalContent}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Place Buy Offer</Text>
+            <Text style={styles.modalTitle}>{t('Place Buy Offer')}</Text>
             <TouchableOpacity onPress={onClose}>
               <Icon name="close" size={22} color={COLORS.text} />
             </TouchableOpacity>
@@ -44,13 +46,16 @@ export default function PlaceBuyOfferModal({
 
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.modalScroll}>
             <Text style={styles.modalSubtitle}>
-              Offer terms for {item.commodityName} - Grade {item.grade} ({item.sellerName})
+              {t('Offer terms for {commodity} - Grade {grade} ({seller})')
+                .replace('{commodity}', item.commodityName)
+                .replace('{grade}', item.grade)
+                .replace('{seller}', item.sellerName)}
             </Text>
 
             {/* Price & Quantity input */}
             <View style={styles.row}>
               <View style={styles.halfCol}>
-                <Text style={styles.inputLabel}>Offer Price (₹/{item.sellingPriceUnit})</Text>
+                <Text style={styles.inputLabel}>{t('Offer Price (₹/{unit})').replace('{unit}', item.sellingPriceUnit)}</Text>
                 <TextInput
                   style={[
                     styles.modalInput,
@@ -59,28 +64,34 @@ export default function PlaceBuyOfferModal({
                   keyboardType="numeric"
                   value={item.isNegotiable === false ? String(item.sellingPrice) : offerPrice}
                   onChangeText={setOfferPrice}
-                  placeholder="e.g. 2400"
+                  placeholder={t('e.g. 2400')}
                   editable={item.isNegotiable !== false}
                 />
                 <Text style={styles.hintText}>
-                  {item.isNegotiable === false ? 'Price is fixed by seller' : `Seller asks ₹${item.sellingPrice}`}
+                  {item.isNegotiable === false 
+                    ? t('Price is fixed by seller') 
+                    : t('Seller asks ₹{price}').replace('{price}', String(item.sellingPrice))}
                 </Text>
               </View>
               <View style={styles.halfCol}>
-                <Text style={styles.inputLabel}>Quantity ({item.unit})</Text>
+                <Text style={styles.inputLabel}>{t('Quantity ({unit})').replace('{unit}', item.unit)}</Text>
                 <TextInput
                   style={styles.modalInput}
                   keyboardType="numeric"
                   value={offerQty}
                   onChangeText={setOfferQty}
-                  placeholder="e.g. 50"
+                  placeholder={t('e.g. 50')}
                 />
-                <Text style={styles.hintText}>Available: {item.quantity} {item.unit}</Text>
+                <Text style={styles.hintText}>
+                  {t('Available: {qty} {unit}')
+                    .replace('{qty}', String(item.quantity))
+                    .replace('{unit}', item.unit)}
+                </Text>
               </View>
             </View>
 
             {/* Delivery Type preference */}
-            <Text style={styles.inputLabel}>Preferred Delivery Type</Text>
+            <Text style={styles.inputLabel}>{t('Preferred Delivery Type')}</Text>
             <View style={styles.pickerRow}>
               {['FOR', 'EX-Warehouse'].map((dt) => (
                 <TouchableOpacity
@@ -89,35 +100,35 @@ export default function PlaceBuyOfferModal({
                   style={[styles.pickerChip, deliveryType === dt && { backgroundColor: theme.primary }]}
                 >
                   <Text style={[styles.pickerChipText, deliveryType === dt && { color: COLORS.white }]}>
-                    {dt === 'FOR' ? 'FOR (Freight Free)' : 'Ex-Warehouse'}
+                    {dt === 'FOR' ? t('FOR (Freight Free)') : t('Ex-Warehouse')}
                   </Text>
                 </TouchableOpacity>
               ))}
             </View>
 
             {/* Proposed Payment timeline Preference */}
-            <Text style={styles.inputLabel}>Proposed Payment Timeline</Text>
+            <Text style={styles.inputLabel}>{t('Proposed Payment Timeline')}</Text>
             <TextInput
               style={styles.modalInput}
               value={paymentTimeline}
               onChangeText={setPaymentTimeline}
-              placeholder="e.g. On delivery confirmation"
+              placeholder={t('e.g. On delivery confirmation')}
             />
 
             {/* Remarks */}
-            <Text style={styles.inputLabel}>Remarks / Custom Clauses</Text>
+            <Text style={styles.inputLabel}>{t('Remarks / Custom Clauses')}</Text>
             <TextInput
               style={[styles.modalInput, styles.remarksInput]}
               multiline
               value={remarks}
               onChangeText={setRemarks}
-              placeholder="e.g. Request immediate loading, jute bags packing..."
+              placeholder={t('e.g. Request immediate loading, jute bags packing...')}
             />
 
             <View style={[styles.escrowNotice, { backgroundColor: theme.primary + '0A' }]}>
               <Icon name="shield-check-outline" size={20} color={theme.primary} />
               <Text style={[styles.escrowNoticeText, { color: theme.text }]}>
-                This offer will initiate a secure negotiation. On acceptance, funds will be deposited in a secure partner escrow account.
+                {t('This offer will initiate a secure negotiation. On acceptance, funds will be deposited in a secure partner escrow account.')}
               </Text>
             </View>
 
@@ -127,7 +138,7 @@ export default function PlaceBuyOfferModal({
                 onPress={onClose}
                 disabled={submittingOffer}
               >
-                <Text style={styles.cancelBtnText}>Cancel</Text>
+                <Text style={styles.cancelBtnText}>{t('Cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalBtn, { backgroundColor: theme.primary }]}
@@ -137,7 +148,7 @@ export default function PlaceBuyOfferModal({
                 {submittingOffer ? (
                   <ActivityIndicator size="small" color={COLORS.white} />
                 ) : (
-                  <Text style={styles.submitBtnText}>Submit Offer</Text>
+                  <Text style={styles.submitBtnText}>{t('Submit Offer')}</Text>
                 )}
               </TouchableOpacity>
             </View>

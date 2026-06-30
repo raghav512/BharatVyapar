@@ -88,6 +88,7 @@ __test__/
 .env.production.local
 .env.*.local
 src/config/index.js
+src/service/api.js
 
 # API keys & secrets
 src/config/secrets.js
@@ -139,3 +140,4 @@ fastlane/*.mobileprovision
 
 # Code Push
 codepush.key
+.agent/skills/cashfree-skills/

@@ -40,7 +40,7 @@ import { showAlert } from '../../../../components/CustomAlertBox';
 import { getFriendlyErrorMessage } from '../../../../utils/errorUtils';
 import { submitSellListing } from '../../../../service/sell/sellService';
 
-export const IMAGE_MAX_SIZE_MB = 10;
+export const IMAGE_MAX_SIZE_MB = 50;
 export const UNIT_TO_PRICE_UNIT = { Ton: 'Ton', Quintal: 'Qt', Kg: 'Kg' };
 
 const INITIAL_STATE = {

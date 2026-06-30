@@ -20,13 +20,14 @@ import { selectUser, selectSelectedRole } from '../../../../store/authSelectors'
 import { SafeScreen } from '../../../../components/SafeScreen';
 import AppHeader from '../../../../components/AppHeader';
 import COLORS from '../../../../constant/colors';
-import { w, h, f } from '../../../../utils/responsive';
+import { w, h, f,mw } from '../../../../utils/responsive';
 import { showAlert } from '../../../../components/CustomAlertBox';
 import { getOffers, submitOffer, getReceivedOffers } from '../../../../service/buy/buyCommodityService';
 import KycBanner from '../../../../components/KycBanner';
 import PlaceBuyOfferModal from './components/PlaceBuyOfferModal';
 import ReceivedOffersModal from './components/ReceivedOffersModal';
 import { viewDocument, downloadFile } from '../../../../utils/documentUtils'; // Force Metro reload after build completion
+import { useTranslation } from '../../../../hook/useTranslation';
 
 const ROLE_THEMES = {
   FPO: { primary: COLORS.fpoPrimary, secondary: COLORS.fpoSecondary, light: COLORS.fpoLight, text: COLORS.fpoText },
@@ -38,6 +39,7 @@ const ROLE_THEMES = {
 const { width: screenWidth } = Dimensions.get('window');
 
 export default function CommodityDetailsScreen({ route, navigation }) {
+  const { t } = useTranslation();
   // PERFORMANCE FIX: Two granular selectors — CommodityDetailsScreen only
   // re-renders when user or selectedRole change, not on unrelated auth fields.
   const user      = useSelector(selectUser);
@@ -128,11 +130,16 @@ export default function CommodityDetailsScreen({ route, navigation }) {
     } catch (err) {
       console.warn('[CommodityDetails] Error checking active offer:', err);
       // Suppress network errors for offline testing/prototype, but set error if no cache exists
-      setApiError(err.message || 'Failed to sync with server.');
+      setApiError(err.message || t('Failed to sync with server.'));
     } finally {
       setCheckingOffer(false);
     }
-  }, [item.id, item._id]);
+  }, [item.id, item._id, t]);
+
+  const handleCloseOfferModal   = useCallback(() => setOfferModalVisible(false), []);
+  const handleCloseReportModal  = useCallback(() => setReportModalVisible(false), []);
+  const handleCloseReceivedModal = useCallback(() => setReceivedOffersModalVisible(false), []);
+  const handleGoBack            = useCallback(() => navigation.goBack(), [navigation]);
 
   const isOwner = Boolean(user?._id && item?.sellerId && String(user._id) === String(item.sellerId));
 
@@ -165,8 +172,8 @@ export default function CommodityDetailsScreen({ route, navigation }) {
     if (!finalPrice || !offerQty) {
       showAlert({
         type: 'error',
-        title: 'Missing Details',
-        message: 'Please fill in the offer price and quantity.',
+        title: t('Missing Details'),
+        message: t('Please fill in the offer price and quantity.'),
       });
       return;
     }
@@ -190,17 +197,19 @@ export default function CommodityDetailsScreen({ route, navigation }) {
       
       showAlert({
         type: 'success',
-        title: 'Offer Submitted',
-        message: `Your buy offer of ₹${offerPrice}/Qtl for ${offerQty} Ton has been submitted successfully to the seller.`,
+        title: t('Offer Submitted'),
+        message: t('Your buy offer of ₹{price}/Qtl for {qty} Ton has been submitted successfully to the seller.')
+          .replace('{price}', offerPrice)
+          .replace('{qty}', offerQty),
         buttons: [
           {
-            text: 'View Negotiation',
+            text: t('View Negotiation'),
             onPress: () => {
               // Navigate to the negotiation thread
               navigation.navigate('NegotiationDetails', { offer: createdOffer, item, role: 'buyer' });
             },
           },
-          { text: 'Keep Browsing' },
+          { text: t('Keep Browsing') },
         ],
       });
       
@@ -213,8 +222,8 @@ export default function CommodityDetailsScreen({ route, navigation }) {
       
       showAlert({
         type: 'error',
-        title: isDuplicate ? 'Active Offer Exists' : 'Submission Failed',
-        message: error.message || 'Failed to submit buy offer. Please try again.',
+        title: isDuplicate ? t('Active Offer Exists') : t('Submission Failed'),
+        message: error.message || t('Failed to submit buy offer. Please try again.'),
       });
     } finally {
       setSubmittingOffer(false);
@@ -226,21 +235,21 @@ export default function CommodityDetailsScreen({ route, navigation }) {
       <SafeScreen style={{ backgroundColor: theme.light }} top={false} bottom={false}>
         <AppHeader
           backgroundColor={theme.primary}
-          title="Commodity Listing"
+          title={t('Commodity Listing')}
           subtitle={`${item.commodityName} (${item.type})`}
           showBackButton={true}
-          onBackPress={() => navigation.goBack()}
+          onBackPress={handleGoBack}
         />
         <View style={styles.centerContainer}>
           <ActivityIndicator size="large" color={theme.primary} />
-          <Text style={styles.loadingText}>Checking listing status...</Text>
+          <Text style={styles.loadingText}>{t('Checking listing status...')}</Text>
         </View>
       </SafeScreen>
     );
   }
 
-  const images = Array.isArray(item?.commodityImages)
-    ? item.commodityImages
+  const images = Array.isArray(item?.images || item?.commodityImages)
+    ? (item.images || item.commodityImages)
         .map(img => {
           if (!img) return null;
           if (typeof img === 'string') return img;
@@ -266,18 +275,18 @@ export default function CommodityDetailsScreen({ route, navigation }) {
     <SafeScreen style={{ backgroundColor: theme.light }} top={false} bottom={false}>
       <AppHeader
         backgroundColor={theme.primary}
-        title="Commodity Listing"
+        title={t('Commodity Listing')}
         subtitle={`${item.commodityName} (${item.type})`}
         showBackButton={true}
-        onBackPress={() => navigation.goBack()}
+        onBackPress={handleGoBack}
       />
 
       {apiError && (
         <View style={styles.errorBanner}>
           <Icon name="alert-circle-outline" size={16} color={COLORS.white} />
-          <Text style={styles.errorBannerText}>{apiError}</Text>
+          <Text style={styles.errorBannerText}>{t(apiError)}</Text>
           <TouchableOpacity onPress={checkActiveOffer} style={styles.retryBadge}>
-            <Text style={styles.retryBadgeText}>Retry</Text>
+            <Text style={styles.retryBadgeText}>{t('Retry')}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -294,7 +303,7 @@ export default function CommodityDetailsScreen({ route, navigation }) {
                   <View style={styles.imageWrapper}>
                     <Image source={{ uri: imgUrl }} style={styles.galleryImage} />
                     <Text style={[styles.galleryTag, { backgroundColor: theme.primary }]}>
-                      Image {index + 1} of {images.length}
+                      {t('Image {current} of {total}').replace('{current}', String(index + 1)).replace('{total}', String(images.length))}
                     </Text>
                   </View>
                 </View>
@@ -306,7 +315,7 @@ export default function CommodityDetailsScreen({ route, navigation }) {
                 <View style={styles.imageWrapper}>
                   <View style={[styles.mockImagePlaceholder, { backgroundColor: theme.primary + '1A' }]}>
                     <Icon name="wheat" size={80} color={theme.primary} />
-                    <Text style={[styles.galleryTag, { backgroundColor: theme.primary }]}>No Image Available</Text>
+                    <Text style={[styles.galleryTag, { backgroundColor: theme.primary }]}>{t('No Image Available')}</Text>
                   </View>
                 </View>
               </View>
@@ -319,32 +328,32 @@ export default function CommodityDetailsScreen({ route, navigation }) {
           <View style={styles.titleRow}>
             <View>
               <Text style={styles.itemName}>{item.commodityName}</Text>
-              <Text style={styles.itemVariety}>Variety: {item.type}</Text>
+              <Text style={styles.itemVariety}>{t('Variety: {type}').replace('{type}', item.type)}</Text>
             </View>
             <View style={styles.priceContainer}>
               <Text style={[styles.itemPrice, { color: theme.primary }]}>₹{item.sellingPrice}</Text>
-              <Text style={styles.itemPriceUnit}>per {item.sellingPriceUnit}</Text>
+              <Text style={styles.itemPriceUnit}>{t('per {unit}').replace('{unit}', item.sellingPriceUnit)}</Text>
             </View>
           </View>
 
           <View style={styles.locationRow}>
             <Icon name="map-marker" size={16} color={COLORS.textLight} />
-            <Text style={styles.locationText}>Location: {item.commodityLocation}</Text>
+            <Text style={styles.locationText}>{t('Location: {location}').replace('{location}', item.commodityLocation)}</Text>
           </View>
 
           <View style={styles.divider} />
 
           <View style={styles.statsGrid}>
             <View style={styles.statBox}>
-              <Text style={styles.statLabel}>Available Qty</Text>
+              <Text style={styles.statLabel}>{t('Available Qty')}</Text>
               <Text style={styles.statValue}>{item.quantity} {item.unit}</Text>
             </View>
             <View style={styles.statBox}>
-              <Text style={styles.statLabel}>Moisture</Text>
+              <Text style={styles.statLabel}>{t('Moisture')}</Text>
               <Text style={styles.statValue}>{item.moisture}</Text>
             </View>
             <View style={styles.statBox}>
-              <Text style={styles.statLabel}>End Date</Text>
+              <Text style={styles.statLabel}>{t('End Date')}</Text>
               <Text style={styles.statValue}>{item.listingEndDate}</Text>
             </View>
           </View>
@@ -352,11 +361,11 @@ export default function CommodityDetailsScreen({ route, navigation }) {
 
         {/* Quality Specifications */}
         <View style={styles.sectionCard}>
-          <Text style={[styles.sectionTitle, { color: theme.primary }]}>Quality Parameters</Text>
+          <Text style={[styles.sectionTitle, { color: theme.primary }]}>{t('Quality Parameters')}</Text>
           
           {filteredParams.length === 0 ? (
             <Text style={{ fontSize: f(12), color: COLORS.textMuted, marginBottom: h(12), fontStyle: 'italic' }}>
-              No quality specifications listed.
+              {t('No quality specifications listed.')}
             </Text>
           ) : (
             <View style={styles.paramsGrid}>
@@ -378,32 +387,32 @@ export default function CommodityDetailsScreen({ route, navigation }) {
                 if (reportUrl) {
                   setReportModalVisible(true);
                 } else {
-                  showAlert({ type: 'error', title: 'Error', message: 'Lab report URL not found.' });
+                  showAlert({ type: 'error', title: t('Error'), message: t('Lab report URL not found.') });
                 }
               }}
             >
               <Icon name="file-pdf-box" size={20} color={theme.primary} />
-              <Text style={[styles.downloadReportText, { color: theme.primary }]}>View / Save Lab Report</Text>
+              <Text style={[styles.downloadReportText, { color: theme.primary }]}>{t('View / Save Lab Report')}</Text>
             </TouchableOpacity>
           ) : (
             <View style={[styles.downloadReportBtn, { borderColor: COLORS.textMuted + '40', borderStyle: 'solid', backgroundColor: '#F8F9FA' }]}>
               <Icon name="file-pdf-box" size={20} color={COLORS.textMuted} />
-              <Text style={[styles.downloadReportText, { color: COLORS.textMuted }]}>Lab Report Not Uploaded</Text>
+              <Text style={[styles.downloadReportText, { color: COLORS.textMuted }]}>{t('Lab Report Not Uploaded')}</Text>
             </View>
           )}
         </View>
 
         {/* Logistics & Delivery Terms */}
         <View style={styles.sectionCard}>
-          <Text style={[styles.sectionTitle, { color: theme.primary }]}>Trade & Logistics Terms</Text>
+          <Text style={[styles.sectionTitle, { color: theme.primary }]}>{t('Trade & Logistics Terms')}</Text>
           
           {item.deliveryType ? (
             <View style={styles.termRow}>
               <Icon name="truck-cargo-container" size={20} color={theme.primary} />
               <View style={styles.termContent}>
-                <Text style={styles.termTitle}>Delivery Type</Text>
+                <Text style={styles.termTitle}>{t('Delivery Type')}</Text>
                 <Text style={styles.termDesc}>
-                  {item.deliveryType === 'FOR' ? 'FOR (Freight Free / Delivered to your location)' : 'EX-WAREHOUSE (Ex works, buyer picks up)'}
+                  {item.deliveryType === 'FOR' ? t('FOR (Freight Free / Delivered to your location)') : t('EX-WAREHOUSE (Ex works, buyer picks up)')}
                 </Text>
               </View>
             </View>
@@ -412,10 +421,10 @@ export default function CommodityDetailsScreen({ route, navigation }) {
           <View style={styles.termRow}>
             <Icon name="scale-balance" size={20} color={theme.primary} />
             <View style={styles.termContent}>
-              <Text style={styles.termTitle}>Weight Basis & Tolerance</Text>
+              <Text style={styles.termTitle}>{t('Weight Basis & Tolerance')}</Text>
               <Text style={styles.termDesc}>
-                {item.weightType || 'Net Weight'}
-                {item.weightTolerance && item.weightTolerance !== '—' ? ` with tolerance ${item.weightTolerance}` : ''}
+                {t(item.weightType || 'Net Weight')}
+                {item.weightTolerance && item.weightTolerance !== '—' ? t(' with tolerance {tolerance}').replace('{tolerance}', item.weightTolerance) : ''}
               </Text>
             </View>
           </View>
@@ -424,7 +433,7 @@ export default function CommodityDetailsScreen({ route, navigation }) {
             <View style={styles.termRow}>
               <Icon name="cash-fast" size={20} color={theme.primary} />
               <View style={styles.termContent}>
-                <Text style={styles.termTitle}>Payment Timeline</Text>
+                <Text style={styles.termTitle}>{t('Payment Timeline')}</Text>
                 <Text style={styles.termDesc}>{item.paymentTimeline}</Text>
               </View>
             </View>
@@ -433,9 +442,9 @@ export default function CommodityDetailsScreen({ route, navigation }) {
           <View style={styles.termRow}>
             <Icon name="shield-check" size={20} color={theme.primary} />
             <View style={styles.termContent}>
-              <Text style={styles.termTitle}>Payment Security</Text>
+              <Text style={styles.termTitle}>{t('Payment Security')}</Text>
               <Text style={styles.termDesc}>
-                {item.escrowEnabled ? '🔐 Secured via BharatVyapar partner Escrow. Payment released only post delivery verification.' : 'Direct payment between parties'}
+                {item.escrowEnabled ? t('🔐 Secured via BharatVyapar partner Escrow. Payment released only post delivery verification.') : t('Direct payment between parties')}
               </Text>
             </View>
           </View>
@@ -444,7 +453,7 @@ export default function CommodityDetailsScreen({ route, navigation }) {
             <View style={styles.termRow}>
               <Icon name="map-legend" size={20} color={theme.primary} />
               <View style={styles.termContent}>
-                <Text style={styles.termTitle}>Billing Address</Text>
+                <Text style={styles.termTitle}>{t('Billing Address')}</Text>
                 <Text style={styles.termDesc}>{item.billingAddress}</Text>
               </View>
             </View>
@@ -452,7 +461,7 @@ export default function CommodityDetailsScreen({ route, navigation }) {
 
           {item.remarks && (
             <View style={styles.remarksBox}>
-              <Text style={styles.remarksTitle}>Remarks / Notes:</Text>
+              <Text style={styles.remarksTitle}>{t('Remarks / Notes:')}</Text>
               <Text style={styles.remarksText}>{item.remarks}</Text>
             </View>
           )}
@@ -460,7 +469,7 @@ export default function CommodityDetailsScreen({ route, navigation }) {
 
         {/* Seller Info Card */}
         <View style={styles.sectionCard}>
-          <Text style={[styles.sectionTitle, { color: theme.primary }]}>Seller Profile</Text>
+          <Text style={[styles.sectionTitle, { color: theme.primary }]}>{t('Seller Profile')}</Text>
           <View style={styles.sellerHeader}>
             <View style={[styles.sellerAvatar, { backgroundColor: theme.primary }]}>
               <Text style={styles.sellerAvatarText}>
@@ -475,14 +484,27 @@ export default function CommodityDetailsScreen({ route, navigation }) {
                 )}
               </View>
               {item.shopName && item.sellerName ? (
-                <Text style={styles.sellerSubtext}>Contact: {item.sellerName}</Text>
+                <Text style={styles.sellerSubtext}>{t('Contact: {name}').replace('{name}', item.sellerName)}</Text>
               ) : (
-                <Text style={styles.sellerSubtext}>Verified Farmer Producer Organization</Text>
+                <Text style={styles.sellerSubtext}>{t('Verified Farmer Producer Organization')}</Text>
               )}
-              <View style={styles.sellerRatingRow}>
-                <Icon name="star" size={14} color="#D69E2E" />
-                <Text style={styles.sellerRatingText}>{item.sellerRating} • {item.sellerCompletedTrades} completed trades</Text>
-              </View>
+              {item.sellerRating != null ? (
+                <View style={styles.sellerRatingRow}>
+                  <Icon name="star" size={14} color="#D69E2E" />
+                  <Text style={styles.sellerRatingText}>
+                    {t('{rating} • {count} completed trades')
+                      .replace('{rating}', String(item.sellerRating))
+                      .replace('{count}', String(item.sellerCompletedTrades ?? '0'))}
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.sellerRatingRow}>
+                  <Icon name="star-outline" size={14} color={COLORS.textMuted} />
+                  <Text style={styles.sellerRatingText}>
+                    {t('New Seller • 0 completed trades')}
+                  </Text>
+                </View>
+              )}
             </View>
           </View>
         </View>
@@ -501,7 +523,7 @@ export default function CommodityDetailsScreen({ route, navigation }) {
           >
             <Icon name="handshake" size={20} color={COLORS.white} />
             <Text style={styles.primaryActionText}>
-              {loadingOffers ? 'Loading Offers...' : `View Received Offers (${offersCount})`}
+              {loadingOffers ? t('Loading Offers...') : t('View Received Offers ({count})').replace('{count}', String(offersCount))}
             </Text>
             {loadingOffers && <ActivityIndicator size="small" color={COLORS.white} style={{ marginLeft: w(6) }} />}
           </TouchableOpacity>
@@ -512,34 +534,33 @@ export default function CommodityDetailsScreen({ route, navigation }) {
             activeOpacity={0.8}
           >
             <Icon name="handshake" size={20} color={COLORS.white} />
-            <Text style={styles.primaryActionText}>View Your Offer</Text>
+            <Text style={styles.primaryActionText}>{t('View Your Offer')}</Text>
           </TouchableOpacity>
         ) : (
           <TouchableOpacity
             style={[styles.primaryActionBtn, { backgroundColor: theme.primary }]}
             onPress={() => {
-              // TODO: TESTING ONLY — uncomment KYC check before production
-              // if (user?.kycStatus !== 'VERIFIED') {
-              //   showAlert({
-              //     type: 'error',
-              //     title: 'KYC Required',
-              //     message: 'You must complete your PAN verification before placing buy offers.',
-              //   });
-              //   return;
-              // }
+              if (user?.kycStatus !== 'VERIFIED') {
+                showAlert({
+                  type: 'error',
+                  title: 'KYC Required',
+                  message: 'You must complete your PAN verification before placing buy offers.',
+                });
+                return;
+              }
               setOfferModalVisible(true);
             }}
             activeOpacity={0.8}
           >
             <Icon name="cart-arrow-right" size={20} color={COLORS.white} />
-            <Text style={styles.primaryActionText}>Submit Buy Offer</Text>
+            <Text style={styles.primaryActionText}>{t('Submit Buy Offer')}</Text>
           </TouchableOpacity>
         )}
       </View>
 
       <PlaceBuyOfferModal
         visible={offerModalVisible}
-        onClose={() => setOfferModalVisible(false)}
+        onClose={handleCloseOfferModal}
         theme={theme}
         item={item}
         offerPrice={offerPrice}
@@ -559,7 +580,7 @@ export default function CommodityDetailsScreen({ route, navigation }) {
       {isOwner && (
         <ReceivedOffersModal
           visible={receivedOffersModalVisible}
-          onClose={() => setReceivedOffersModalVisible(false)}
+          onClose={handleCloseReceivedModal}
           item={item}
         />
       )}
@@ -568,9 +589,9 @@ export default function CommodityDetailsScreen({ route, navigation }) {
         <Modal
           visible={reportModalVisible}
           transparent
-          animationType="fade"
+          animationType="none"
           statusBarTranslucent
-          onRequestClose={() => setReportModalVisible(false)}
+          onRequestClose={handleCloseReportModal}
         >
           <View style={styles.reportModalOverlay}>
             <View style={styles.optionsCard}>
@@ -578,8 +599,8 @@ export default function CommodityDetailsScreen({ route, navigation }) {
                 <View style={[styles.pdfIconContainer, { backgroundColor: theme.light }]}>
                   <Icon name="file-pdf-box" size={32} color={theme.primary} />
                 </View>
-                <Text style={styles.optionsTitle}>Government Lab Report</Text>
-                <Text style={styles.optionsSubtitle}>Choose an action for the PDF report</Text>
+                <Text style={styles.optionsTitle}>{t('Government Lab Report')}</Text>
+                <Text style={styles.optionsSubtitle}>{t('Choose an action for the PDF report')}</Text>
               </View>
 
               <View style={styles.optionsList}>
@@ -596,7 +617,7 @@ export default function CommodityDetailsScreen({ route, navigation }) {
                   <View style={[styles.optionIconBox, { backgroundColor: '#EFF6FF' }]}>
                     <Icon name="eye-outline" size={20} color="#3B82F6" />
                   </View>
-                  <Text style={styles.optionRowText}>Open / View PDF</Text>
+                  <Text style={styles.optionRowText}>{t('Open / View PDF')}</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -613,7 +634,7 @@ export default function CommodityDetailsScreen({ route, navigation }) {
                   <View style={[styles.optionIconBox, { backgroundColor: '#F0FDF4' }]}>
                     <Icon name="file-download-outline" size={20} color="#22C55E" />
                   </View>
-                  <Text style={styles.optionRowText}>Save / Download PDF</Text>
+                  <Text style={styles.optionRowText}>{t('Save / Download PDF')}</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -629,23 +650,23 @@ export default function CommodityDetailsScreen({ route, navigation }) {
                         url: reportUrl,
                       });
                     } catch (err) {
-                      showAlert({ type: 'error', title: 'Error', message: 'Failed to share.' });
+                      showAlert({ type: 'error', title: t('Error'), message: t('Failed to share.') });
                     }
                   }}
                 >
                   <View style={[styles.optionIconBox, { backgroundColor: '#F5F3FF' }]}>
                     <Icon name="share-variant-outline" size={20} color="#8B5CF6" />
                   </View>
-                  <Text style={styles.optionRowText}>Share PDF Link</Text>
+                  <Text style={styles.optionRowText}>{t('Share PDF Link')}</Text>
                 </TouchableOpacity>
               </View>
 
               <TouchableOpacity
                 style={styles.optionsCancelBtn}
                 activeOpacity={0.8}
-                onPress={() => setReportModalVisible(false)}
+                onPress={handleCloseReportModal}
               >
-                <Text style={styles.optionsCancelText}>Cancel</Text>
+                <Text style={styles.optionsCancelText}>{t('Cancel')}</Text>
               </TouchableOpacity>
             </View>
           </View>

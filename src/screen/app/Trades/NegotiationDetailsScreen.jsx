@@ -21,6 +21,7 @@ import COLORS from '../../../constant/colors';
 import { w, h, f } from '../../../utils/responsive';
 import { showAlert } from '../../../components/CustomAlertBox';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from '../../../hook/useTranslation';
 import {
   getOfferDetails,
   submitCounterOffer,
@@ -67,6 +68,7 @@ const STATUS_CONFIG = {
 
 
 export default function NegotiationDetailsScreen({ route, navigation }) {
+  const { t } = useTranslation();
   // PERFORMANCE FIX: Two granular selectors — only re-renders when user or
   // selectedRole change, not on profileLoading or other unrelated auth fields.
   const user      = useSelector(selectUser);
@@ -236,7 +238,7 @@ export default function NegotiationDetailsScreen({ route, navigation }) {
   // ─── Load Offer Detail ────────────────────────────────────────────────
   const loadOfferDetails = useCallback(async (isRefresh = false, isBackground = false) => {
     if (!offerId) {
-      setApiError('No offer ID provided.');
+      setApiError(t('No offer ID provided.'));
       if (!isBackground) setLoading(false);
       return;
     }
@@ -317,7 +319,7 @@ export default function NegotiationDetailsScreen({ route, navigation }) {
     } catch (err) {
       console.warn('[NegotiationDetails] loadOfferDetails error:', err);
       if (!isBackground) {
-        setApiError(err?.message || 'Failed to load negotiation details.');
+        setApiError(err?.message || t('Failed to load negotiation details.'));
       }
     } finally {
       if (!isBackground) {
@@ -326,6 +328,8 @@ export default function NegotiationDetailsScreen({ route, navigation }) {
       }
     }
   }, [offerId, routeItem, user?._id]);
+
+  const handleRefresh = useCallback(() => loadOfferDetails(true), [loadOfferDetails]);
 
   useFocusEffect(
     useCallback(() => {
@@ -365,18 +369,20 @@ export default function NegotiationDetailsScreen({ route, navigation }) {
 
     showAlert({
       type: 'confirm',
-      title: 'Accept Offer',
-      message: `Accept offer at ₹${price}/Qtl for ${qty} Ton? This will create an Escrow Deal and close negotiation.`,
+      title: t('Accept Offer'),
+      message: t('Accept offer at ₹{price}/Qtl for {qty} Ton? This will create an Escrow Deal and close negotiation.')
+        .replace('{price}', price)
+        .replace('{qty}', qty),
       buttons: [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('Cancel'), style: 'cancel' },
         {
-          text: 'Accept & Close Deal',
+          text: t('Accept & Close Deal'),
           onPress: async () => {
             if (isMockMode) {
               setOffer(prev => ({ ...prev, status: 'accepted', dealId: 'mock-deal-123' }));
               showAlert({
-                type: 'success', title: 'Deal Confirmed!', message: 'Mock Escrow deal generated.',
-                buttons: [{ text: 'View Deal', onPress: () => navigation.navigate('DealDetails', { dealId: 'mock-deal-123', item, role: myRole }) }]
+                type: 'success', title: t('Deal Confirmed!'), message: t('Mock Escrow deal generated.'),
+                buttons: [{ text: t('View Deal'), onPress: () => navigation.navigate('DealDetails', { dealId: 'mock-deal-123', item, role: myRole }) }]
               });
               return;
             }
@@ -386,11 +392,11 @@ export default function NegotiationDetailsScreen({ route, navigation }) {
               const deal = res?.data?.deal || res?.deal;
               showAlert({
                 type: 'success',
-                title: 'Deal Confirmed!',
-                message: 'Agreement signed. Escrow deal generated successfully. Other pending offers on this listing will be automatically expired by the system.',
+                title: t('Deal Confirmed!'),
+                message: t('Agreement signed. Escrow deal generated successfully. Other pending offers on this listing will be automatically expired by the system.'),
                 buttons: [
                   {
-                    text: 'View Deal',
+                    text: t('View Deal'),
                     onPress: () => {
                       navigation.navigate('DealDetails', {
                         dealId: deal?.id || deal?._id,
@@ -406,8 +412,8 @@ export default function NegotiationDetailsScreen({ route, navigation }) {
               console.warn('[NegotiationDetails] acceptOffer error:', err);
               showAlert({
                 type: 'error',
-                title: 'Accept Failed',
-                message: err?.message || 'Could not accept offer. Please try again.',
+                title: t('Accept Failed'),
+                message: err?.message || t('Could not accept offer. Please try again.'),
               });
             } finally {
               setSubmittingAction(false);
@@ -424,17 +430,17 @@ export default function NegotiationDetailsScreen({ route, navigation }) {
     if (submittingAction) return;
     showAlert({
       type: 'confirm',
-      title: 'Reject Offer',
-      message: 'Are you sure you want to reject this offer? This will end the negotiation.',
+      title: t('Reject Offer'),
+      message: t('Are you sure you want to reject this offer? This will end the negotiation.'),
       buttons: [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('Cancel'), style: 'cancel' },
         {
-          text: 'Reject Offer',
+          text: t('Reject Offer'),
           style: 'destructive',
           onPress: async () => {
             if (isMockMode) {
               setOffer(prev => ({ ...prev, status: 'rejected' }));
-              showAlert({ type: 'info', title: 'Offer Rejected', message: 'Mock Negotiation ended.', buttons: [{ text: 'Back', onPress: () => navigation.goBack() }] });
+              showAlert({ type: 'info', title: t('Offer Rejected'), message: t('Mock Negotiation ended.'), buttons: [{ text: t('Back'), onPress: () => navigation.goBack() }] });
               return;
             }
             try {
@@ -442,16 +448,16 @@ export default function NegotiationDetailsScreen({ route, navigation }) {
               await rejectOffer(offerId, { reason: 'Rejected by user' });
               showAlert({
                 type: 'info',
-                title: 'Offer Rejected',
-                message: 'The offer has been declined. Negotiation ended.',
-                buttons: [{ text: 'Back', onPress: () => navigation.goBack() }],
+                title: t('Offer Rejected'),
+                message: t('The offer has been declined. Negotiation ended.'),
+                buttons: [{ text: t('Back'), onPress: () => navigation.goBack() }],
               });
             } catch (err) {
               console.warn('[NegotiationDetails] rejectOffer error:', err);
               showAlert({
                 type: 'error',
-                title: 'Reject Failed',
-                message: err?.message || 'Could not decline offer. Please try again.',
+                title: t('Reject Failed'),
+                message: err?.message || t('Could not decline offer. Please try again.'),
               });
             } finally {
               setSubmittingAction(false);
@@ -469,8 +475,8 @@ export default function NegotiationDetailsScreen({ route, navigation }) {
     if (!counterPrice || !counterQty) {
       showAlert({
         type: 'error',
-        title: 'Validation Error',
-        message: 'Please fill in counter price and quantity.',
+        title: t('Validation Error'),
+        message: t('Please fill in counter price and quantity.'),
       });
       return;
     }
@@ -482,7 +488,7 @@ export default function NegotiationDetailsScreen({ route, navigation }) {
       if (delta >= 0.05) {
         const minAllowed = +(lastRound.price * 0.951).toFixed(0);
         const maxAllowed = +(lastRound.price * 1.049).toFixed(0);
-        setCounterPriceError(`Price must be within 5%. Allowed: ₹${minAllowed} – ₹${maxAllowed}`);
+        setCounterPriceError(t('Price must be within 5%. Allowed: ₹{min} – ₹{max}').replace('{min}', minAllowed).replace('{max}', maxAllowed));
         return;
       }
     }
@@ -510,7 +516,7 @@ export default function NegotiationDetailsScreen({ route, navigation }) {
         ]
       }));
       setCounterModalVisible(false);
-      showAlert({ type: 'success', title: 'Counter Submitted', message: 'Mock: Wait for other party response.' });
+      showAlert({ type: 'success', title: t('Counter Submitted'), message: t('Mock: Wait for other party response.') });
       return;
     }
 
@@ -531,8 +537,8 @@ export default function NegotiationDetailsScreen({ route, navigation }) {
 
       showAlert({
         type: 'success',
-        title: 'Counter Offer Sent',
-        message: `Counter of ₹${counterPrice}/Qtl sent. Waiting for response.`,
+        title: t('Counter Offer Sent'),
+        message: t('Counter of ₹{price}/Qtl sent. Waiting for response.').replace('{price}', counterPrice),
       });
 
       // Reload to get updated state
@@ -544,20 +550,103 @@ export default function NegotiationDetailsScreen({ route, navigation }) {
       const code = err?.backendError?.error?.code || err?.code;
       if (code === 'PRICE_JUMP_TOO_HIGH') {
         const meta = err?.backendError?.error;
-        setCounterPriceError(meta?.message || 'Price change cannot exceed 5% per round.');
+        setCounterPriceError(meta?.message ? t(meta.message) : t('Price change cannot exceed 5% per round.'));
       } else if (code === 'COOLDOWN_ACTIVE') {
         const retryAfter = err?.backendError?.error?.retryAfter;
-        const retryMsg = retryAfter ? ` Try again after ${new Date(retryAfter).toLocaleTimeString()}.` : '';
-        showAlert({ type: 'error', title: 'Cooldown Active', message: `Please wait 30 minutes before countering again.${retryMsg}` });
+        const retryMsg = retryAfter ? t(' Try again after {time}.').replace('{time}', new Date(retryAfter).toLocaleTimeString()) : '';
+        showAlert({ type: 'error', title: t('Cooldown Active'), message: t('Please wait 30 minutes before countering again.{retry}').replace('{retry}', retryMsg) });
       } else if (code === 'ROUND_LIMIT_REACHED') {
-        showAlert({ type: 'error', title: 'Round Limit', message: `Maximum ${maxRounds} negotiation rounds reached. You can only Accept or Reject.` });
+        showAlert({ type: 'error', title: t('Round Limit'), message: t('Maximum {rounds} negotiation rounds reached. You can only Accept or Reject.').replace('{rounds}', maxRounds) });
       } else {
-        showAlert({ type: 'error', title: 'Counter Failed', message: err?.message || 'Could not submit counter offer. Try again.' });
+        showAlert({ type: 'error', title: t('Counter Failed'), message: err?.message || t('Could not submit counter offer. Try again.') });
       }
     } finally {
       setSubmittingAction(false);
     }
   };
+
+  const buyerObj = offer?.buyerId || offer?.buyer || routeOffer?.buyerId || routeOffer?.buyer || {};
+  const buyerFirstName = buyerObj.firstName || '';
+  const buyerLastName  = buyerObj.lastName || '';
+  const buyerFullName  = (buyerFirstName || buyerLastName)
+    ? `${buyerFirstName} ${buyerLastName}`.trim()
+    : buyerObj.name || routeOffer?.buyerName || 'Buyer';
+  const buyerShopName  = buyerObj.shopName || buyerObj.shopname || '';
+  const buyerName      = buyerShopName ? `${buyerFullName} (${buyerShopName})` : buyerFullName;
+  const sellerObj = offer?.sellerId || offer?.seller || offer?.commodityId?.sellerId || offer?.commodity?.sellerId || routeOffer?.sellerId || routeOffer?.seller || {};
+  const sellerFirstName = typeof sellerObj === 'object' ? (sellerObj.firstName || '') : '';
+  const sellerLastName  = typeof sellerObj === 'object' ? (sellerObj.lastName || '') : '';
+  const sellerFullName  = (sellerFirstName || sellerLastName)
+    ? `${sellerFirstName} ${sellerLastName}`.trim()
+    : (typeof sellerObj === 'object' ? sellerObj.name : '') || item?.sellerName || '—';
+  const sellerShopName  = typeof sellerObj === 'object' ? (sellerObj.shopName || sellerObj.shopname || '') : '';
+  const sellerName      = sellerShopName ? `${sellerFullName} (${sellerShopName})` : sellerFullName;
+  const renderedTimeline = React.useMemo(() => {
+    if (displayRounds.length === 0) {
+      return (
+        <View style={styles.emptyRoundsContainer}>
+          <Icon name="chat-outline" size={32} color={COLORS.textMuted} />
+          <Text style={styles.emptyRoundsText}>{t('Offer submitted. Waiting for first response.')}</Text>
+        </View>
+      );
+    }
+    return displayRounds.map((rd, index) => {
+      const isMe = String(rd.proposedBy) === myRole;
+      return (
+        <View key={index} style={styles.timelineRow}>
+          <View style={styles.timelineIndicators}>
+            <View style={[styles.dot, { backgroundColor: isMe ? theme.primary : '#3182CE' }]} />
+            {index < displayRounds.length - 1 && <View style={styles.line} />}
+          </View>
+
+          <View style={[
+            styles.roundCard,
+            isMe
+              ? [styles.myRoundCard, { borderLeftColor: theme.primary }]
+              : styles.theirRoundCard,
+            rd.isFinal && styles.finalRoundCard,
+          ]}>
+            <View style={styles.roundHeader}>
+              <Text style={[styles.roundSender, { color: isMe ? theme.primary : '#3182CE' }]}>
+                {isMe ? t('You') : (myRole === 'buyer' ? sellerName : buyerName)}
+              </Text>
+              <Text style={styles.roundDate}>
+                {rd.createdAt ? new Date(rd.createdAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'}
+              </Text>
+            </View>
+            {isNegotiable && (
+              <Text style={styles.roundTitle}>
+                {t('Round')} {rd.roundNumber ?? index + 1}
+                {rd.isFinal ? t(' (FINAL OFFER)') : ''}
+              </Text>
+            )}
+            <View style={styles.roundSpecs}>
+              <View>
+                <Text style={styles.specLabel}>{t('Price')}</Text>
+                <Text style={[styles.specVal, { color: isMe ? theme.primary : '#3182CE' }]}>
+                  ₹{rd.price}/Qt
+                </Text>
+              </View>
+              <View>
+                <Text style={styles.specLabel}>{t('Quantity')}</Text>
+                <Text style={styles.specVal}>{rd.quantity} {item?.unit || 'Ton'}</Text>
+              </View>
+              <View>
+                <Text style={styles.specLabel}>{t('Trade')}</Text>
+                <Text style={styles.specVal}>{rd.tradeType || offer?.tradeType || 'FOR'}</Text>
+              </View>
+            </View>
+            {rd.remarks ? (
+              <View style={styles.remarksRow}>
+                <Icon name="message-text-outline" size={13} color={COLORS.textLight} />
+                <Text style={styles.roundRemarks}>"{rd.remarks}"</Text>
+              </View>
+            ) : null}
+          </View>
+        </View>
+      );
+    });
+  }, [displayRounds, myRole, theme, sellerName, buyerName, isNegotiable, item?.unit, offer?.tradeType, t]);
 
   // ─── Loading & Error screens ─────────────────────────────────────────
   if (loading) {
@@ -565,13 +654,13 @@ export default function NegotiationDetailsScreen({ route, navigation }) {
       <SafeScreen style={{ backgroundColor: theme.light }} top={false} bottom={false}>
         <AppHeader
           backgroundColor={theme.primary}
-          title="Negotiation Thread"
+          title={t("Negotiation Thread")}
           showBackButton={true}
           onBackPress={() => navigation.goBack()}
         />
         <View style={styles.centeredContainer}>
           <ActivityIndicator size="large" color={theme.primary} />
-          <Text style={styles.loadingText}>Loading negotiation details...</Text>
+          <Text style={styles.loadingText}>{t("Loading negotiation details...")}</Text>
         </View>
       </SafeScreen>
     );
@@ -582,16 +671,16 @@ export default function NegotiationDetailsScreen({ route, navigation }) {
       <SafeScreen style={{ backgroundColor: theme.light }} top={false} bottom={false}>
         <AppHeader
           backgroundColor={theme.primary}
-          title="Negotiation Thread"
+          title={t("Negotiation Thread")}
           showBackButton={true}
           onBackPress={() => navigation.goBack()}
         />
         <View style={styles.centeredContainer}>
           <Icon name="alert-circle-outline" size={48} color={COLORS.error} />
-          <Text style={styles.errorTitle}>Failed to Load</Text>
-          <Text style={styles.errorDesc}>{apiError}</Text>
+          <Text style={styles.errorTitle}>{t("Failed to Load")}</Text>
+          <Text style={styles.errorDesc}>{t(apiError)}</Text>
           <TouchableOpacity style={[styles.retryBtn, { backgroundColor: theme.primary }]} onPress={() => loadOfferDetails()}>
-            <Text style={styles.retryBtnText}>Retry API</Text>
+            <Text style={styles.retryBtnText}>{t("Retry API")}</Text>
           </TouchableOpacity>
           <TouchableOpacity 
             style={[styles.retryBtn, { backgroundColor: '#3182CE', marginTop: h(12) }]} 
@@ -638,7 +727,7 @@ export default function NegotiationDetailsScreen({ route, navigation }) {
               setItem(routeItem || { commodityName: 'Mock Wheat Grade A', unit: 'Ton' });
             }}
           >
-            <Text style={styles.retryBtnText}>Start Test Mock Flow</Text>
+            <Text style={styles.retryBtnText}>{t("Start Test Mock Flow")}</Text>
           </TouchableOpacity>
         </View>
       </SafeScreen>
@@ -658,109 +747,27 @@ export default function NegotiationDetailsScreen({ route, navigation }) {
     : isMyTurn
     ? { label: 'Action Required', color: '#2563eb', bg: '#eff6ff' }
     : { label: 'Awaiting Response', color: '#9ca3af', bg: '#f9fafb' };
-  const buyerObj = offer?.buyerId || offer?.buyer || routeOffer?.buyerId || routeOffer?.buyer || {};
-  const buyerFirstName = buyerObj.firstName || '';
-  const buyerLastName  = buyerObj.lastName || '';
-  const buyerFullName  = (buyerFirstName || buyerLastName)
-    ? `${buyerFirstName} ${buyerLastName}`.trim()
-    : buyerObj.name || routeOffer?.buyerName || 'Buyer';
-  const buyerShopName  = buyerObj.shopName || buyerObj.shopname || '';
-  const buyerName      = buyerShopName ? `${buyerFullName} (${buyerShopName})` : buyerFullName;
-  const sellerObj = offer?.sellerId || offer?.seller || offer?.commodityId?.sellerId || offer?.commodity?.sellerId || routeOffer?.sellerId || routeOffer?.seller || {};
-  const sellerFirstName = typeof sellerObj === 'object' ? (sellerObj.firstName || '') : '';
-  const sellerLastName  = typeof sellerObj === 'object' ? (sellerObj.lastName || '') : '';
-  const sellerFullName  = (sellerFirstName || sellerLastName)
-    ? `${sellerFirstName} ${sellerLastName}`.trim()
-    : (typeof sellerObj === 'object' ? sellerObj.name : '') || item?.sellerName || '—';
-  const sellerShopName  = typeof sellerObj === 'object' ? (sellerObj.shopName || sellerObj.shopname || '') : '';
-  const renderedTimeline = React.useMemo(() => {
-    if (displayRounds.length === 0) {
-      return (
-        <View style={styles.emptyRoundsContainer}>
-          <Icon name="chat-outline" size={32} color={COLORS.textMuted} />
-          <Text style={styles.emptyRoundsText}>Offer submitted. Waiting for first response.</Text>
-        </View>
-      );
-    }
-    return displayRounds.map((rd, index) => {
-      const isMe = String(rd.proposedBy) === myRole;
-      return (
-        <View key={index} style={styles.timelineRow}>
-          <View style={styles.timelineIndicators}>
-            <View style={[styles.dot, { backgroundColor: isMe ? theme.primary : '#3182CE' }]} />
-            {index < displayRounds.length - 1 && <View style={styles.line} />}
-          </View>
-
-          <View style={[
-            styles.roundCard,
-            isMe
-              ? [styles.myRoundCard, { borderLeftColor: theme.primary }]
-              : styles.theirRoundCard,
-            rd.isFinal && styles.finalRoundCard,
-          ]}>
-            <View style={styles.roundHeader}>
-              <Text style={[styles.roundSender, { color: isMe ? theme.primary : '#3182CE' }]}>
-                {isMe ? 'You' : (myRole === 'buyer' ? sellerName : buyerName)}
-              </Text>
-              <Text style={styles.roundDate}>
-                {rd.createdAt ? new Date(rd.createdAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'}
-              </Text>
-            </View>
-            {isNegotiable && (
-              <Text style={styles.roundTitle}>
-                Round {rd.roundNumber ?? index + 1}
-                {rd.isFinal ? ' (FINAL OFFER)' : ''}
-              </Text>
-            )}
-            <View style={styles.roundSpecs}>
-              <View>
-                <Text style={styles.specLabel}>Price</Text>
-                <Text style={[styles.specVal, { color: isMe ? theme.primary : '#3182CE' }]}>
-                  ₹{rd.price}/Qt
-                </Text>
-              </View>
-              <View>
-                <Text style={styles.specLabel}>Quantity</Text>
-                <Text style={styles.specVal}>{rd.quantity} {item?.unit || 'Ton'}</Text>
-              </View>
-              <View>
-                <Text style={styles.specLabel}>Trade</Text>
-                <Text style={styles.specVal}>{rd.tradeType || offer?.tradeType || 'FOR'}</Text>
-              </View>
-            </View>
-            {rd.remarks ? (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: w(4), marginTop: h(8) }}>
-                <Icon name="message-text-outline" size={13} color={COLORS.textLight} />
-                <Text style={styles.roundRemarks}>"{rd.remarks}"</Text>
-              </View>
-            ) : null}
-          </View>
-        </View>
-      );
-    });
-  }, [displayRounds, myRole, theme, sellerName, buyerName, isNegotiable, item?.unit, offer?.tradeType]);
-
   return (
     <SafeScreen style={{ backgroundColor: theme.light }} top={false} bottom={false}>
       <AppHeader
         backgroundColor={theme.primary}
-        title="Negotiation"
-        subtitle={item?.commodityName || 'Thread'}
+        title={t("Negotiation")}
+        subtitle={item?.commodityName ? t(item.commodityName) : t('Thread')}
         showBackButton={true}
         onBackPress={() => navigation.goBack()}
       />
 
       {isMockMode && (
-        <View style={{ backgroundColor: '#F6E05E', paddingHorizontal: w(16), paddingVertical: h(10), flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Text style={{ fontWeight: '800', fontSize: f(11), color: '#744210' }}>🧪 TEST MOCK FLOW ACTIVE</Text>
-          <TouchableOpacity 
+        <View style={styles.mockBanner}>
+          <Text style={styles.mockBannerText}>🧪 {t('TEST MOCK FLOW ACTIVE')}</Text>
+          <TouchableOpacity
             onPress={() => {
               setMockRoleToggle(prev => prev === 'buyer' ? 'seller' : 'buyer');
-              setCooldownSecs(0); // clear cooldown so you can test immediately
-            }} 
-            style={{ backgroundColor: '#000', paddingHorizontal: w(12), paddingVertical: h(6), borderRadius: 6 }}
+              setCooldownSecs(0);
+            }}
+            style={styles.swapRoleBtn}
           >
-            <Text style={{ color: '#fff', fontSize: f(10), fontWeight: '700' }}>Swap Role (Now: {mockRoleToggle})</Text>
+            <Text style={styles.swapRoleBtnText}>{t('Swap Role (Now: {role})').replace('{role}', t(mockRoleToggle))}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -769,9 +776,9 @@ export default function NegotiationDetailsScreen({ route, navigation }) {
       {apiError && (
         <View style={styles.errorBanner}>
           <Icon name="alert-circle-outline" size={15} color={COLORS.white} />
-          <Text style={styles.errorBannerText}>{apiError}</Text>
+          <Text style={styles.errorBannerText}>{t(apiError)}</Text>
           <TouchableOpacity onPress={() => loadOfferDetails(true)} style={styles.retryBadge}>
-            <Text style={styles.retryBadgeText}>Retry</Text>
+            <Text style={styles.retryBadgeText}>{t("Retry")}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -782,7 +789,7 @@ export default function NegotiationDetailsScreen({ route, navigation }) {
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={() => loadOfferDetails(true)}
+            onRefresh={handleRefresh}
             colors={[theme.primary]}
             tintColor={theme.primary}
           />
@@ -792,29 +799,29 @@ export default function NegotiationDetailsScreen({ route, navigation }) {
         {/* Deal Summary Header */}
         <View style={styles.dealHeaderCard}>
           <View style={styles.dealHeaderTop}>
-            <View style={{ flex: 1 }}>
+            <View style={styles.flex1}>
               <Text style={styles.commodityTitle}>
-                {item?.name || item?.commodityName || 'Commodity'} {item?.grade ? `(Grade ${item.grade})` : ''}
+                {t(item?.name || item?.commodityName || 'Commodity')} {item?.grade ? `(${t('Grade')} ${item.grade})` : ''}
               </Text>
-              <Text style={styles.commodityVariety}>{item?.type || item?.description || ''}</Text>
+              <Text style={styles.commodityVariety}>{item?.type ? t(item.type) : (item?.description ? t(item.description) : '')}</Text>
               <View style={[styles.partyRow, { alignItems: 'flex-start' }]}>
                 <Icon name="account-multiple-outline" size={14} color={COLORS.textMuted} style={{ marginTop: 2 }} />
-                <View style={{ flex: 1, gap: 4 }}>
+                <View style={styles.partiesColumn}>
                   {myRole !== 'buyer' && (
                     <Text style={styles.partyText} numberOfLines={1}>
-                      <Text style={{ fontWeight: '700' }}>Buyer:</Text> {buyerName}
+                      <Text style={{ fontWeight: '700' }}>{t('Buyer:')}</Text> {buyerName}
                     </Text>
                   )}
                   {myRole !== 'seller' && (
                     <Text style={styles.partyText} numberOfLines={1}>
-                      <Text style={{ fontWeight: '700' }}>Seller:</Text> {sellerName}
+                      <Text style={{ fontWeight: '700' }}>{t('Seller:')}</Text> {sellerName}
                     </Text>
                   )}
                 </View>
               </View>
             </View>
             <View style={[styles.statusBadge, { backgroundColor: statusCfg.bg }]}>
-              <Text style={[styles.statusBadgeText, { color: statusCfg.color }]}>{statusCfg.label}</Text>
+              <Text style={[styles.statusBadgeText, { color: statusCfg.color }]}>{t(statusCfg.label)}</Text>
             </View>
           </View>
 
@@ -822,7 +829,7 @@ export default function NegotiationDetailsScreen({ route, navigation }) {
           <View style={styles.pricingStrip}>
             <View style={styles.pricingItem}>
               <Text style={styles.pricingLabel}>
-                {myRole === 'seller' ? "Buyer's Offer" : "Original Ask"}
+                {myRole === 'seller' ? t("Buyer's Offer") : t("Original Ask")}
               </Text>
               <Text style={[styles.pricingVal, myRole === 'seller' && { color: theme.primary }]}>
                 ₹{myRole === 'seller' 
@@ -833,7 +840,7 @@ export default function NegotiationDetailsScreen({ route, navigation }) {
             <View style={styles.pricingDivider} />
             <View style={styles.pricingItem}>
               <Text style={styles.pricingLabel}>
-                {myRole === 'seller' ? "Your Listed Price" : "Current Bid"}
+                {myRole === 'seller' ? t("Your Listed Price") : t("Current Bid")}
               </Text>
               <Text style={[styles.pricingVal, myRole !== 'seller' && { color: theme.primary }]}>
                 ₹{myRole === 'seller'
@@ -843,7 +850,7 @@ export default function NegotiationDetailsScreen({ route, navigation }) {
             </View>
             <View style={styles.pricingDivider} />
             <View style={styles.pricingItem}>
-              <Text style={styles.pricingLabel}>Quantity</Text>
+              <Text style={styles.pricingLabel}>{t('Quantity')}</Text>
               <Text style={styles.pricingVal}>{lastRound?.quantity || offer?.quantity || '--'} {item?.unit || 'Ton'}</Text>
             </View>
           </View>
@@ -854,27 +861,27 @@ export default function NegotiationDetailsScreen({ route, navigation }) {
               <View style={styles.metaChip}>
                 <Icon name="refresh-circle" size={14} color={theme.primary} />
                 <Text style={[styles.metaChipText, { color: theme.primary }]}>
-                  Round {displayRoundCount} of {maxRounds}
+                  {t('Round {current} of {total}').replace('{current}', displayRoundCount).replace('{total}', maxRounds)}
                 </Text>
               </View>
             ) : (
               <View style={[styles.metaChip, { backgroundColor: '#F0FFF4', borderColor: '#C6F6D5' }]}>
                 <Icon name="handshake" size={14} color="#38A169" />
                 <Text style={[styles.metaChipText, { color: '#2F855A' }]}>
-                  Direct Deal (No Negotiation)
+                  {t('Direct Deal (No Negotiation)')}
                 </Text>
               </View>
             )}
             <View style={styles.metaChip}>
               <Icon name="timer-outline" size={14} color={displayRoundCount >= 4 ? COLORS.error : COLORS.textMuted} />
               <Text style={[styles.metaChipText, { color: displayRoundCount >= 4 ? COLORS.error : COLORS.textMuted }]}>
-                Expires: {formatExpiry(expiresAt)}
+                {t('Expires: {time}').replace('{time}', t(formatExpiry(expiresAt)))}
               </Text>
             </View>
             {isFinalOfferFromServer && (
               <View style={[styles.metaChip, { backgroundColor: '#FFF5F5' }]}>
                 <Icon name="flag-checkered" size={14} color={COLORS.error} />
-                <Text style={[styles.metaChipText, { color: COLORS.error }]}>Final Offer</Text>
+                <Text style={[styles.metaChipText, { color: COLORS.error }]}>{t('Final Offer')}</Text>
               </View>
             )}
           </View>
@@ -891,18 +898,18 @@ export default function NegotiationDetailsScreen({ route, navigation }) {
               size={22}
               color={offer?.status === 'accepted' ? COLORS.success : offer?.status === 'rejected' ? COLORS.error : COLORS.textMuted}
             />
-            <View style={{ flex: 1 }}>
+            <View style={styles.flex1}>
               <Text style={[styles.terminalBannerTitle, {
                 color: offer?.status === 'accepted' ? '#22543D' : offer?.status === 'rejected' ? '#742A2A' : '#4A5568',
               }]}>
-                {offer?.status === 'accepted' ? 'Deal Accepted — Escrow Created' : offer?.status === 'rejected' ? 'Offer Rejected' : 'Offer Expired'}
+                {offer?.status === 'accepted' ? t('Deal Accepted — Escrow Created') : offer?.status === 'rejected' ? t('Offer Rejected') : t('Offer Expired')}
               </Text>
               <Text style={styles.terminalBannerDesc}>
                 {offer?.status === 'accepted'
-                  ? 'Both parties agreed. Check Deal Details for escrow progress.'
+                  ? t('Both parties agreed. Check Deal Details for escrow progress.')
                   : offer?.status === 'rejected'
-                  ? 'This negotiation has ended. You may submit a new offer.'
-                  : 'This offer expired after 24 hours with no agreement reached.'}
+                  ? t('This negotiation has ended. You may submit a new offer.')
+                  : t('This offer expired after 24 hours with no agreement reached.')}
               </Text>
             </View>
           </View>
@@ -912,7 +919,7 @@ export default function NegotiationDetailsScreen({ route, navigation }) {
         {isNegotiable && roundsMaxed && !isTerminal && (
           <View style={styles.roundLimitBanner}>
             <Icon name="alert" size={18} color="#D69E2E" />
-            <Text style={styles.roundLimitText}>Maximum {maxRounds} rounds reached — Accept or Reject only</Text>
+            <Text style={styles.roundLimitText}>{t('Maximum {rounds} rounds reached — Accept or Reject only').replace('{rounds}', maxRounds)}</Text>
           </View>
         )}
 
@@ -921,14 +928,14 @@ export default function NegotiationDetailsScreen({ route, navigation }) {
           <View style={styles.waitingBanner}>
             <Icon name="timer-sand" size={18} color={COLORS.textMuted} />
             <Text style={styles.waitingText}>
-              Waiting for {currentTurn === 'buyer' ? buyerName : sellerName} to respond...
+              {t('Waiting for {party} to respond...').replace('{party}', currentTurn === 'buyer' ? buyerName : sellerName)}
             </Text>
           </View>
         )}
 
         {/* Negotiation History */}
         <Text style={[styles.sectionTitle, { color: theme.primary }]}>
-          {isNegotiable ? 'Negotiation History' : 'Offer Details'}
+          {isNegotiable ? t('Negotiation History') : t('Offer Details')}
         </Text>
         <View style={styles.timeline}>
           {renderedTimeline}
@@ -942,7 +949,7 @@ export default function NegotiationDetailsScreen({ route, navigation }) {
         {submittingAction ? (
           <View style={styles.pendingContainer}>
             <ActivityIndicator size="small" color={theme.primary} />
-            <Text style={styles.pendingText}>Processing...</Text>
+            <Text style={styles.pendingText}>{t('Processing...')}</Text>
           </View>
         ) : isTerminal ? (
           // Terminal state — show view deal or go back
@@ -952,7 +959,7 @@ export default function NegotiationDetailsScreen({ route, navigation }) {
               onPress={() => navigation.navigate('DealDetails', { dealId: offer?.dealId, item, role: myRole })}
             >
               <Icon name="handshake" size={18} color={COLORS.white} />
-              <Text style={styles.acceptBtnText}>View Escrow Deal</Text>
+              <Text style={styles.acceptBtnText}>{t('View Escrow Deal')}</Text>
             </TouchableOpacity>
           ) : (
             <TouchableOpacity
@@ -960,7 +967,7 @@ export default function NegotiationDetailsScreen({ route, navigation }) {
               onPress={() => navigation.goBack()}
             >
               <Icon name="arrow-left" size={18} color={COLORS.white} />
-              <Text style={styles.acceptBtnText}>Back to Offers</Text>
+              <Text style={styles.acceptBtnText}>{t('Back to Offers')}</Text>
             </TouchableOpacity>
           )
         ) : (
@@ -970,7 +977,7 @@ export default function NegotiationDetailsScreen({ route, navigation }) {
               <View style={[styles.pendingContainer, { marginBottom: h(8) }]}>
                 <Icon name="timer-sand" size={16} color={COLORS.textMuted} />
                 <Text style={[styles.pendingText, { flex: 1, fontSize: f(11) }]}>
-                  Waiting for {currentTurn === 'buyer' ? buyerName : sellerName} to respond...
+                  {t('Waiting for {party} to respond...').replace('{party}', currentTurn === 'buyer' ? buyerName : sellerName)}
                 </Text>
               </View>
             )}
@@ -979,7 +986,7 @@ export default function NegotiationDetailsScreen({ route, navigation }) {
               {myRole === 'seller' && (
                 <TouchableOpacity style={[styles.actionBtn, styles.rejectBtn]} onPress={handleReject}>
                   <Icon name="close-circle-outline" size={18} color={COLORS.error} />
-                  <Text style={styles.rejectBtnText}>Decline</Text>
+                  <Text style={styles.rejectBtnText}>{t('Decline')}</Text>
                 </TouchableOpacity>
               )}
 
@@ -993,7 +1000,7 @@ export default function NegotiationDetailsScreen({ route, navigation }) {
                   disabled={submittingAction}
                 >
                   <Icon name="check-decagram" size={18} color={COLORS.white} />
-                  <Text style={styles.acceptBtnText}>Accept</Text>
+                  <Text style={styles.acceptBtnText}>{t('Accept')}</Text>
                 </TouchableOpacity>
               )}
 
@@ -1010,7 +1017,7 @@ export default function NegotiationDetailsScreen({ route, navigation }) {
                 >
                   <Icon name="swap-horizontal" size={18} color={cooldownActive ? COLORS.textMuted : theme.primary} />
                   <Text style={[styles.counterBtnText, { color: cooldownActive ? COLORS.textMuted : theme.primary }]}>
-                    {cooldownActive ? `Counter (${formatCountdown(cooldownSecs)})` : 'Counter'}
+                    {cooldownActive ? t('Counter ({time})').replace('{time}', formatCountdown(cooldownSecs)) : t('Counter')}
                   </Text>
                 </TouchableOpacity>
               )}
@@ -1029,55 +1036,65 @@ export default function NegotiationDetailsScreen({ route, navigation }) {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Submit Counter Offer</Text>
+              <Text style={styles.modalTitle}>{t('Submit Counter Offer')}</Text>
               <TouchableOpacity onPress={() => { setCounterModalVisible(false); setCounterPriceError(''); }}>
                 <Icon name="close" size={22} color={COLORS.text} />
               </TouchableOpacity>
             </View>
 
             <Text style={styles.modalDesc}>
-              Max 5% price movement per round. {displayRoundCount + 1 < maxRounds ? `${maxRounds - displayRoundCount - 1} round(s) remaining after this.` : 'This is the final round.'}
+              {t('Max 5% price movement per round. {info}')
+                .replace('{info}', displayRoundCount + 1 < maxRounds 
+                  ? t('{remaining} round(s) remaining after this.').replace('{remaining}', maxRounds - displayRoundCount - 1)
+                  : t('This is the final round.')
+                )}
             </Text>
 
-            <Text style={styles.inputLabel}>Counter Price (₹/Qt)</Text>
+            <Text style={styles.inputLabel}>{t('Counter Price (₹/Qt)')}</Text>
             <TextInput
               style={[styles.modalInput, counterPriceError ? styles.inputError : null]}
               keyboardType="numeric"
               value={counterPrice}
               onChangeText={v => { setCounterPrice(v); setCounterPriceError(''); }}
-              placeholder={`e.g. ${lastRound?.price || ''}`}
+              placeholder={lastRound?.price ? t('e.g. {price}').replace('{price}', lastRound.price) : t('e.g. price')}
             />
             {counterPriceError ? (
-              <Text style={styles.inlineError}>{counterPriceError}</Text>
+              <Text style={styles.inlineError}>{t(counterPriceError)}</Text>
             ) : (
               <Text style={styles.hint}>
-                Last price: ₹{lastRound?.price || '--'} — Allowed ±5%: ₹{lastRound ? +(lastRound.price * 0.951).toFixed(0) : '--'} – ₹{lastRound ? +(lastRound.price * 1.049).toFixed(0) : '--'}
+                {t('Last price: ₹{lastPrice} — Allowed ±5%: ₹{min} – ₹{max}')
+                  .replace('{lastPrice}', lastRound?.price || '--')
+                  .replace('{min}', lastRound ? +(lastRound.price * 0.951).toFixed(0) : '--')
+                  .replace('{max}', lastRound ? +(lastRound.price * 1.049).toFixed(0) : '--')
+                }
               </Text>
             )}
 
-            <Text style={styles.inputLabel}>Quantity ({item?.unit || 'Ton'})</Text>
+            <Text style={styles.inputLabel}>
+              {t('Quantity ({unit})').replace('{unit}', item?.unit ? t(item.unit) : 'Ton')}
+            </Text>
             <TextInput
               style={styles.modalInput}
               keyboardType="numeric"
               value={counterQty}
               onChangeText={setCounterQty}
-              placeholder={`e.g. ${lastRound?.quantity || ''}`}
+              placeholder={lastRound?.quantity ? t('e.g. {qty}').replace('{qty}', lastRound.quantity) : t('e.g. quantity')}
             />
 
-            <Text style={styles.inputLabel}>Remarks / Conditions</Text>
+            <Text style={styles.inputLabel}>{t('Remarks / Conditions')}</Text>
             <TextInput
               style={[styles.modalInput, { height: h(60), textAlignVertical: 'top' }]}
               multiline
               value={counterRemarks}
               onChangeText={setCounterRemarks}
-              placeholder="Explain your counter terms..."
+              placeholder={t('Explain your counter terms...')}
             />
 
             <View style={styles.switchRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.switchLabel}>Mark as Final Offer</Text>
+              <View style={styles.flex1}>
+                <Text style={styles.switchLabel}>{t('Mark as Final Offer')}</Text>
                 <Text style={styles.switchDesc}>
-                  {isFinalOfferToggle ? 'Other party can ONLY accept or reject — no more counters.' : 'Other party can counter further.'}
+                  {isFinalOfferToggle ? t('Other party can ONLY accept or reject — no more counters.') : t('Other party can counter further.')}
                 </Text>
               </View>
               <Switch
@@ -1094,7 +1111,7 @@ export default function NegotiationDetailsScreen({ route, navigation }) {
                 onPress={() => { setCounterModalVisible(false); setCounterPriceError(''); }}
                 disabled={submittingAction}
               >
-                <Text style={styles.cancelBtnText}>Cancel</Text>
+                <Text style={styles.cancelBtnText}>{t('Cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalBtn, { backgroundColor: theme.primary }]}
@@ -1104,7 +1121,7 @@ export default function NegotiationDetailsScreen({ route, navigation }) {
                 {submittingAction ? (
                   <ActivityIndicator size="small" color={COLORS.white} />
                 ) : (
-                  <Text style={styles.submitBtnText}>Submit Counter</Text>
+                  <Text style={styles.submitBtnText}>{t('Submit Counter')}</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -1592,10 +1609,9 @@ const styles = StyleSheet.create({
     color: COLORS.text,
   },
   switchDesc: {
-    fontSize: f(9),
+    fontSize: f(11),
     color: COLORS.textMuted,
     marginTop: h(2),
-    lineHeight: h(13),
   },
   modalActions: {
     flexDirection: 'row',
@@ -1621,5 +1637,43 @@ const styles = StyleSheet.create({
     color: COLORS.white,
     fontWeight: '700',
     fontSize: f(13),
+  },
+  // Interned helpers — prevent new JSObject allocation every render
+  flex1: {
+    flex: 1,
+  },
+  partiesColumn: {
+    flex: 1,
+    gap: 4,
+  },
+  remarksRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: w(4),
+    marginTop: h(8),
+  },
+  mockBanner: {
+    backgroundColor: '#F6E05E',
+    paddingHorizontal: w(16),
+    paddingVertical: h(10),
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  mockBannerText: {
+    fontWeight: '800',
+    fontSize: f(11),
+    color: '#744210',
+  },
+  swapRoleBtn: {
+    backgroundColor: '#000',
+    paddingHorizontal: w(12),
+    paddingVertical: h(6),
+    borderRadius: 6,
+  },
+  swapRoleBtnText: {
+    color: '#fff',
+    fontSize: f(10),
+    fontWeight: '700',
   },
 });

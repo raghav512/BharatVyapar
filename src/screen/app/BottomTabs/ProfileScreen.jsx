@@ -15,6 +15,7 @@ import { logoutUser, getUserDetails, updateProfile } from '../../../store/authSl
 import { selectUser, selectSelectedRole, selectProfileLoading } from '../../../store/authSelectors';
 import { showAlert } from '../../../components/CustomAlertBox';
 import userApi from '../../../service/user/userApi';
+import { useTranslation } from '../../../hook/useTranslation';
 import {
   ROLE_THEMES,
   GENDER_OPTIONS,
@@ -166,6 +167,7 @@ function profileReducer(state, action) {
 
 export default function ProfileScreen() {
   const dispatch = useDispatch();
+  const { t } = useTranslation();
   // PERFORMANCE FIX: Three separate granular selectors instead of whole-slice.
   // ProfileScreen only re-renders when user, selectedRole, or profileLoading
   // change — not on sendOtpLoading, verifyOtpError, or any other auth field.
@@ -220,15 +222,15 @@ export default function ProfileScreen() {
       console.error('[ProfileScreen] getUserDetails failed:', result.payload);
       showAlert({
         type: 'error',
-        title: 'Sync Failed',
-        message: result.payload || 'Failed to sync profile details from server. Please check your internet connection.',
+        title: t('Sync Failed'),
+        message: t(result.payload || 'Failed to sync profile details from server. Please check your internet connection.'),
         buttons: [
-          { text: 'Retry', onPress: fetchUserDetails },
-          { text: 'OK' }
+          { text: t('Retry'), onPress: fetchUserDetails },
+          { text: t('OK') }
         ]
       });
     }
-  }, [dispatch]);
+  }, [dispatch, t]);
 
   useEffect(() => {
     // Dispatch getUserDetails only once per mount. Using a ref guard prevents
@@ -250,7 +252,7 @@ export default function ProfileScreen() {
   const avatarInitial  = displayData.firstName ? displayData.firstName[0].toUpperCase() : '?';
   const hasAvatar      = !!displayData.profileImage;
   const hasName        = !!(displayData.firstName?.trim() || displayData.lastName?.trim());
-  const saveBtnLabel   = profileLoading ? 'Saving...' : 'Save Changes';
+  const saveBtnLabel   = profileLoading ? t('Saving...') : t('Save Changes');
 
   // Dynamic Styles (without useMemo overhead)
   const roleBadgeBg = { backgroundColor: theme.primary + '1A' };
@@ -272,12 +274,12 @@ export default function ProfileScreen() {
       const isUploading = uploadingDoc === d.type;
       const canViewDoc = !!val || !!uploadedDocuments[d.type] || !!documentPreviews[d.type];
       const uploadIcon = canViewDoc ? 'swap-horizontal' : 'cloud-upload';
-      const uploadLabel = isUploading ? 'Uploading...' : canViewDoc ? 'Replace' : 'Upload';
+      const uploadLabel = isUploading ? t('Uploading...') : canViewDoc ? t('Replace') : t('Upload');
       const uploadBg = { backgroundColor: theme.primary + '15' };
       const docPreview = documentPreviews[d.type];
       const statusText = docPreview
-        ? (isUploading ? 'Selected, uploading...' : 'Selected (not uploaded)')
-        : val ? '✓ Uploaded' : '✗ Not Uploaded';
+        ? (isUploading ? t('Selected, uploading...') : t('Selected (not uploaded)'))
+        : val ? t('✓ Uploaded') : t('✗ Not Uploaded');
 
       return {
         ...d,
@@ -291,7 +293,7 @@ export default function ProfileScreen() {
         statusText,
       };
     });
-  }, [displayData, viewingDoc, uploadingDoc, uploadedDocuments, documentPreviews, theme.primary]);
+  }, [displayData, viewingDoc, uploadingDoc, uploadedDocuments, documentPreviews, theme.primary, t]);
 
   // Callbacks
   const openEditModal = useCallback(() => {
@@ -325,11 +327,11 @@ export default function ProfileScreen() {
 
     if (updateProfile.fulfilled.match(result)) {
       closeModal();
-      showAlert({ type: 'info', title: 'Profile Saved', message: 'Your profile has been updated successfully.', buttons: [{ text: 'Done' }] });
+      showAlert({ type: 'info', title: t('Profile Saved'), message: t('Your profile has been updated successfully.'), buttons: [{ text: t('Done') }] });
     } else {
-      showAlert({ type: 'error', title: 'Update Failed', message: result.payload || 'Failed to update profile.', buttons: [{ text: 'OK' }] });
+      showAlert({ type: 'error', title: t('Update Failed'), message: t(result.payload || 'Failed to update profile.'), buttons: [{ text: t('OK') }] });
     }
-  }, [dispatch, modalForm, profileLoading, closeModal]);
+  }, [dispatch, modalForm, profileLoading, closeModal, t]);
 
   const handleKycSubmit = useCallback(async () => {
     const panErr = validatePan(kycForm.pan);
@@ -347,9 +349,9 @@ export default function ProfileScreen() {
 
       showAlert({
         type: 'info',
-        title: 'KYC Verified',
-        message: 'Your PAN details have been successfully verified.',
-        buttons: [{ text: 'OK' }]
+        title: t('KYC Verified'),
+        message: t('Your PAN details have been successfully verified.'),
+        buttons: [{ text: t('OK') }]
       });
 
       await dispatch(getUserDetails());
@@ -358,29 +360,29 @@ export default function ProfileScreen() {
       console.error('[ProfileScreen] handleKycSubmit verification failure:', error);
       showAlert({
         type: 'error',
-        title: 'KYC Verification Failed',
-        message: error?.message || 'Failed to verify PAN. Please ensure details are correct.',
-        buttons: [{ text: 'OK' }]
+        title: t('KYC Verification Failed'),
+        message: t(error?.message || 'Failed to verify PAN. Please ensure details are correct.'),
+        buttons: [{ text: t('OK') }]
       });
     } finally {
       dispatchAction({ type: 'SET_KYC_LOADING', payload: false });
     }
-  }, [dispatch, kycForm]);
+  }, [dispatch, kycForm, t]);
 
   const handleLogout = useCallback(() => {
     showAlert({
       type: 'confirm', 
-      title: 'Logout', 
-      message: 'Are you sure you want to logout?',
+      title: t('Logout'), 
+      message: t('Are you sure you want to logout?'),
       buttons: [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Logout', style: 'destructive', onPress: () => {
+        { text: t('Cancel'), style: 'cancel' },
+        { text: t('Logout'), style: 'destructive', onPress: () => {
           console.log('[ProfileScreen] handleLogout: user triggered logout session termination.');
           dispatch(logoutUser());
         }},
       ],
     });
-  }, [dispatch]);
+  }, [dispatch, t]);
 
   const handleViewDoc = useCallback(async (type) => {
     const previewUri = documentPreviews[type]?.uri;
@@ -423,33 +425,33 @@ export default function ProfileScreen() {
       if (updateProfile.fulfilled.match(updateResult)) {
         await dispatch(getUserDetails());
         if (isMounted.current) {
-          showAlert({ type: 'info', title: 'Success', message: 'Profile picture updated successfully.', buttons: [{ text: 'OK' }] });
+          showAlert({ type: 'info', title: t('Success'), message: t('Profile picture updated successfully.'), buttons: [{ text: t('OK') }] });
         }
       } else {
-        showAlert({ type: 'error', title: 'Upload Failed', message: updateResult.payload || 'Failed to update profile picture.', buttons: [{ text: 'OK' }] });
+        showAlert({ type: 'error', title: t('Upload Failed'), message: t(updateResult.payload || 'Failed to update profile picture.'), buttons: [{ text: t('OK') }] });
       }
     } catch (error) {
       console.error('[ProfileScreen] openImagePicker error:', error);
-      showAlert({ type: 'error', title: 'Error', message: 'Something went wrong while selecting the image.', buttons: [{ text: 'OK' }] });
+      showAlert({ type: 'error', title: t('Error'), message: t('Something went wrong while selecting the image.'), buttons: [{ text: t('OK') }] });
     } finally {
       if (isMounted.current) {
         dispatchAction({ type: 'SET_UPLOADING_DOC', payload: null });
       }
     }
-  }, [dispatch]);
+  }, [dispatch, t]);
 
   const handleProfileImagePick = useCallback(() => {
     showAlert({
       type: 'confirm',
-      title: 'Update Profile Picture',
-      message: 'Choose an option to upload your profile image',
+      title: t('Update Profile Picture'),
+      message: t('Choose an option to upload your profile image'),
       buttons: [
-        { text: 'Take Photo', style: 'default', onPress: () => openImagePicker('camera') },
-        { text: 'Choose Gallery', style: 'default', onPress: () => openImagePicker('gallery') },
-        { text: 'Cancel', style: 'cancel' }
+        { text: t('Take Photo'), style: 'default', onPress: () => openImagePicker('camera') },
+        { text: t('Choose Gallery'), style: 'default', onPress: () => openImagePicker('gallery') },
+        { text: t('Cancel'), style: 'cancel' }
       ]
     });
-  }, [openImagePicker]);
+  }, [openImagePicker, t]);
 
   const handleUploadDoc = useCallback(async (type) => {
     const uploadTask = { type, cancelled: false, promise: null };
@@ -478,9 +480,10 @@ export default function ProfileScreen() {
         if (!isMounted.current || uploadTask.cancelled || result.meta?.aborted) return;
         dispatchAction({ type: 'SET_UPLOADED_DOC', payload: type });
         dispatchAction({ type: 'REMOVE_DOC_PREVIEW', payload: type });
-        showAlert({ type: 'info', title: 'Uploaded', message: `${type} uploaded successfully.`, buttons: [{ text: 'OK' }] });
+        const docLabel = DOCUMENTS_CONFIG.find(d => d.type === type)?.label || type;
+        showAlert({ type: 'info', title: t('Uploaded'), message: t('{document} uploaded successfully.').replace('{document}', t(docLabel)), buttons: [{ text: t('OK') }] });
       } else if (!result.meta?.aborted && !result.payload?.cancelled) {
-        showAlert({ type: 'error', title: 'Upload Failed', message: result.payload || 'Upload failed.', buttons: [{ text: 'OK' }] });
+        showAlert({ type: 'error', title: t('Upload Failed'), message: t(result.payload || 'Upload failed.'), buttons: [{ text: t('OK') }] });
       }
     } finally {
       if (uploadAbortRef.current === uploadTask) {
@@ -490,11 +493,11 @@ export default function ProfileScreen() {
         dispatchAction({ type: 'SET_UPLOADING_DOC', payload: null });
       }
     }
-  }, [dispatch]);
+  }, [dispatch, t]);
 
   return (
     <SafeScreen style={styles.safeContainer} top={false} bottom={false}>
-      <AppHeader backgroundColor={theme.primary} title="My Profile" subtitle="Manage your account & preferences" showBackButton={false} />
+      <AppHeader backgroundColor={theme.primary} title={t("My Profile")} subtitle={t("Manage your account & preferences")} showBackButton={false} />
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
@@ -508,8 +511,8 @@ export default function ProfileScreen() {
             style={[styles.avatarWrapper, avatarWrapperBorder]}
             accessible={true}
             accessibilityRole="imagebutton"
-            accessibilityLabel="Update Profile Picture"
-            accessibilityHint="Choose to take a photo or select from gallery"
+            accessibilityLabel={t("Update Profile Picture")}
+            accessibilityHint={t("Choose to take a photo or select from gallery")}
           >
             {hasAvatar ? (
               <Image source={{ uri: displayData.profileImage }} style={styles.avatarImage} />
@@ -532,13 +535,15 @@ export default function ProfileScreen() {
               </View>
             )}
           </TouchableOpacity>
-          <Text style={styles.profileName} accessible={true} accessibilityLabel={`Name: ${fullName}`}>{fullName}</Text>
-          <View style={styles.profilePhoneWrapper} accessible={true} accessibilityLabel={`Phone: +91 ${displayData.phone}`}>
+          <Text style={styles.profileName} accessible={true} accessibilityLabel={`${t('Name')}: ${fullName}`}>{fullName}</Text>
+          <View style={styles.profilePhoneWrapper} accessible={true} accessibilityLabel={`${t('Phone')}: +91 ${displayData.phone}`}>
             <Icon name="phone" size={14} color="#718096" />
             <Text style={styles.profilePhoneNoMargin}>+91 {displayData.phone}</Text>
           </View>
-          <View style={[styles.roleBadge, roleBadgeBg]} accessible={true} accessibilityLabel={`Role: ${selectedRole}`}>
-            <Text style={[styles.roleBadgeText, roleBadgeTextCol]}>Role: {selectedRole}</Text>
+          <View style={[styles.roleBadge, roleBadgeBg]} accessible={true} accessibilityLabel={`${t('Role')}: ${t(selectedRole)}`}>
+            <Text style={[styles.roleBadgeText, roleBadgeTextCol]}>
+              {t('Role: {role}').replace('{role}', t(selectedRole))}
+            </Text>
           </View>
         </View>
 
@@ -546,15 +551,15 @@ export default function ProfileScreen() {
         <View style={[styles.fieldsCard, styles.kycCard]}>
           <View style={styles.kycHeaderRow}>
             <View style={styles.kycTitleCol}>
-              <Text style={styles.sectionTitleDark}>KYC Verification</Text>
-              <Text style={styles.kycSubtitle}>Verify details to authorize buys & sells</Text>
+              <Text style={styles.sectionTitleDark}>{t("KYC Verification")}</Text>
+              <Text style={styles.kycSubtitle}>{t("Verify details to authorize buys & sells")}</Text>
             </View>
             <View style={[
               styles.kycBadge,
               user?.kycStatus === 'VERIFIED' 
                 ? styles.kycBadgeVerified
                 : styles.kycBadgeUnverified
-            ]} accessible={true} accessibilityLabel={`KYC Status: ${user?.kycStatus === 'VERIFIED' ? 'Verified' : 'Not Verified'}`}>
+            ]} accessible={true} accessibilityLabel={`${t('KYC Status')}: ${user?.kycStatus === 'VERIFIED' ? t('Verified') : t('Not Verified')}`}>
               <Icon 
                 name={user?.kycStatus === 'VERIFIED' ? 'check-decagram' : 'alert-decagram'} 
                 size={16} 
@@ -564,7 +569,7 @@ export default function ProfileScreen() {
                 styles.kycBadgeText, 
                 user?.kycStatus === 'VERIFIED' ? styles.kycBadgeTextVerified : styles.kycBadgeTextUnverified
               ]}>
-                {user?.kycStatus === 'VERIFIED' ? 'VERIFIED' : 'NOT VERIFIED'}
+                {user?.kycStatus === 'VERIFIED' ? t('VERIFIED') : t('NOT VERIFIED')}
               </Text>
             </View>
           </View>
@@ -572,20 +577,20 @@ export default function ProfileScreen() {
           {user?.kycStatus === 'VERIFIED' ? (
             <View style={styles.kycVerifiedContainer}>
               <View style={styles.kycInfoRow}>
-                <View style={styles.kycDetailCol} accessible={true} accessibilityLabel={`PAN number: ${user?.panDetails?.pan || '—'}`}>
-                  <Text style={styles.kycDetailLabel}>PAN NUMBER</Text>
+                <View style={styles.kycDetailCol} accessible={true} accessibilityLabel={`${t('PAN number')}: ${user?.panDetails?.pan || '—'}`}>
+                  <Text style={styles.kycDetailLabel}>{t('PAN NUMBER')}</Text>
                   <Text style={styles.kycDetailVal}>{user?.panDetails?.pan || '—'}</Text>
                 </View>
-                <View style={styles.kycDetailCol} accessible={true} accessibilityLabel={`Cardholder name: ${user?.panDetails?.name_provided || user?.panDetails?.registered_name || '—'}`}>
-                  <Text style={styles.kycDetailLabel}>CARDHOLDER NAME</Text>
+                <View style={styles.kycDetailCol} accessible={true} accessibilityLabel={`${t('Cardholder name')}: ${user?.panDetails?.name_provided || user?.panDetails?.registered_name || '—'}`}>
+                  <Text style={styles.kycDetailLabel}>{t('CARDHOLDER NAME')}</Text>
                   <Text style={styles.kycDetailVal}>{user?.panDetails?.name_provided || user?.panDetails?.registered_name || '—'}</Text>
                 </View>
               </View>
               {user?.panDetails?.registered_name && user?.panDetails?.registered_name !== user?.panDetails?.name_provided && (
-                <View style={styles.kycMatchRow} accessible={true} accessibilityLabel={`Registered name matches: ${user?.panDetails?.registered_name}`}>
+                <View style={styles.kycMatchRow} accessible={true} accessibilityLabel={`${t('Registered name matches')}: ${user?.panDetails?.registered_name}`}>
                   <Icon name="shield-check-outline" size={12} color="#319795" />
                   <Text style={styles.kycMatchTextNoMargin}>
-                    Registered as: {user?.panDetails?.registered_name}
+                    {t('Registered as: {name}').replace('{name}', user?.panDetails?.registered_name)}
                   </Text>
                 </View>
               )}
@@ -595,7 +600,7 @@ export default function ProfileScreen() {
               <View style={styles.kycWarningRow}>
                 <Icon name="alert-circle-outline" size={18} color="#E53E3E" style={{ marginTop: h(1) }} />
                 <Text style={styles.kycWarningTextLeft}>
-                  Your account is not authorized for trading. Complete your PAN-based KYC immediately to enable Sell & Buy features.
+                  {t('Your account is not authorized for trading. Complete your PAN-based KYC immediately to enable Sell & Buy features.')}
                 </Text>
               </View>
               <TouchableOpacity 
@@ -606,11 +611,11 @@ export default function ProfileScreen() {
                 }}
                 accessible={true}
                 accessibilityRole="button"
-                accessibilityLabel="Do your KYC"
-                accessibilityHint="Opens PAN card verification modal"
+                accessibilityLabel={t("Do your KYC")}
+                accessibilityHint={t("Opens PAN card verification modal")}
               >
                 <Icon name="shield-check" size={18} color={COLORS.white} />
-                <Text style={styles.kycBtnText}>Do Your KYC</Text>
+                <Text style={styles.kycBtnText}>{t('Do Your KYC')}</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -619,17 +624,17 @@ export default function ProfileScreen() {
         {/* Profile Details Card */}
         <View style={styles.fieldsCard}>
           <View style={styles.sectionTitleRow}>
-            <Text style={styles.sectionTitleDark}>Profile Details</Text>
+            <Text style={styles.sectionTitleDark}>{t('Profile Details')}</Text>
             <TouchableOpacity 
               onPress={openEditModal} 
               style={[styles.editBtn, editBtnBg]}
               accessible={true}
               accessibilityRole="button"
-              accessibilityLabel="Edit Profile"
-              accessibilityHint="Opens edit details modal form"
+              accessibilityLabel={t('Edit Profile')}
+              accessibilityHint={t("Opens edit details modal form")}
             >
               <Icon name="pencil" size={15} color={theme.primary} />
-              <Text style={[styles.editBtnText, editBtnTextCol]}>Edit Profile</Text>
+              <Text style={[styles.editBtnText, editBtnTextCol]}>{t('Edit Profile')}</Text>
             </TouchableOpacity>
           </View>
           <View style={styles.row}>
@@ -649,12 +654,12 @@ export default function ProfileScreen() {
 
         {/* Documents Card */}
         <View style={styles.fieldsCard}>
-          <Text style={styles.sectionTitleDarkMargin}>Documents & KYC</Text>
+          <Text style={styles.sectionTitleDarkMargin}>{t('Documents & KYC')}</Text>
           {documents.map(doc => (
             <View style={styles.docRow} key={doc.type}>
-              <View style={styles.flex1} accessible={true} accessibilityLabel={`${doc.label}: ${doc.statusText}`}>
-                <Text style={styles.docLabel}>{doc.label}</Text>
-                <Text style={styles.docStatus}>{doc.statusText}</Text>
+              <View style={styles.flex1} accessible={true} accessibilityLabel={`${t(doc.label)}: ${t(doc.statusText)}`}>
+                <Text style={styles.docLabel}>{t(doc.label)}</Text>
+                <Text style={styles.docStatus}>{t(doc.statusText)}</Text>
               </View>
               <View style={styles.docActions}>
                 {doc.canViewDoc && (
@@ -664,11 +669,11 @@ export default function ProfileScreen() {
                     style={styles.docBtnGray}
                     accessible={true}
                     accessibilityRole="button"
-                    accessibilityLabel={`View ${doc.label}`}
-                    accessibilityHint={`Displays document for ${doc.label}`}
+                    accessibilityLabel={t('View {document}').replace('{document}', t(doc.label))}
+                    accessibilityHint={t('Displays document for {document}').replace('{document}', t(doc.label))}
                   >
                     <Icon name="eye" size={15} color="#4A5568" />
-                    <Text style={styles.docBtnTextGray}>{doc.isViewing ? '...' : 'View'}</Text>
+                    <Text style={styles.docBtnTextGray}>{doc.isViewing ? '...' : t('View')}</Text>
                   </TouchableOpacity>
                 )}
                 <TouchableOpacity 
@@ -677,8 +682,8 @@ export default function ProfileScreen() {
                   style={[styles.docBtn, doc.uploadBg]}
                   accessible={true}
                   accessibilityRole="button"
-                  accessibilityLabel={`${doc.uploadLabel} ${doc.label}`}
-                  accessibilityHint={`Upload or replace file for ${doc.label}`}
+                  accessibilityLabel={t('{action} {document}').replace('{action}', doc.uploadLabel).replace('{document}', t(doc.label))}
+                  accessibilityHint={t('Upload or replace file for {document}').replace('{document}', t(doc.label))}
                 >
                   <Icon name={doc.uploadIcon} size={15} color={theme.primary} />
                   <Text style={[styles.docBtnText, { color: theme.primary }]}>{doc.uploadLabel}</Text>
@@ -689,7 +694,7 @@ export default function ProfileScreen() {
                     style={[styles.docBtn, styles.cancelBtn]}
                     accessible={true}
                     accessibilityRole="button"
-                    accessibilityLabel={`Cancel uploading ${doc.label}`}
+                    accessibilityLabel={t('Cancel uploading {document}').replace('{document}', t(doc.label))}
                   >
                     <Icon name="close" size={15} color="#E53E3E" />
                   </TouchableOpacity>
@@ -706,11 +711,11 @@ export default function ProfileScreen() {
           activeOpacity={0.8}
           accessible={true}
           accessibilityRole="button"
-          accessibilityLabel="Logout"
-          accessibilityHint="Terminates session and returns to login screen"
+          accessibilityLabel={t('Logout')}
+          accessibilityHint={t('Terminates session and returns to login screen')}
         >
           <Icon name="power" size={22} color={COLORS.error} />
-          <Text style={styles.logoutText}>Logout </Text>
+          <Text style={styles.logoutText}>{t('Logout')}</Text>
         </TouchableOpacity>
 
       </ScrollView>
@@ -721,13 +726,13 @@ export default function ProfileScreen() {
           <View style={styles.modalContainer}>
 
             <View style={[styles.modalHeader, { backgroundColor: theme.primary }]}>
-              <Text style={styles.modalTitle}>Edit Profile</Text>
+              <Text style={styles.modalTitle}>{t('Edit Profile')}</Text>
               <TouchableOpacity 
                 onPress={closeModal} 
                 style={styles.closeBtn}
                 accessible={true}
                 accessibilityRole="button"
-                accessibilityLabel="Close Modal"
+                accessibilityLabel={t('Close Modal')}
               >
                 <Icon name="close" size={22} color={COLORS.white} />
               </TouchableOpacity>
@@ -752,7 +757,7 @@ export default function ProfileScreen() {
 
               {/* Gender picker */}
               <View style={styles.fullCol}>
-                <Text style={styles.fieldLabel}>Gender</Text>
+                <Text style={styles.fieldLabel}>{t('Gender')}</Text>
                 <View style={styles.genderPicker}>
                   {GENDER_OPTIONS.map(g => {
                     const isSelected  = modalForm.gender?.toLowerCase() === g.toLowerCase();
@@ -766,27 +771,27 @@ export default function ProfileScreen() {
                         accessible={true}
                         accessibilityRole="radio"
                         accessibilityState={{ checked: isSelected }}
-                        accessibilityLabel={`Gender option ${g}`}
+                        accessibilityLabel={t('Gender option {gender}').replace('{gender}', t(g))}
                       >
-                        <Text style={[styles.genderChipText, chipTxtStyle]}>{g}</Text>
+                        <Text style={[styles.genderChipText, chipTxtStyle]}>{t(g)}</Text>
                       </TouchableOpacity>
                     );
                   })}
                 </View>
-                {fieldErrors.gender && <Text style={styles.errorText}>{fieldErrors.gender}</Text>}
+                {fieldErrors.gender && <Text style={styles.errorText}>{t(fieldErrors.gender)}</Text>}
               </View>
 
               {/* Phone & Email row */}
               <View style={styles.row}>
                 <View style={styles.halfCol}>
-                  <Text style={styles.fieldLabel}>Phone</Text>
+                  <Text style={styles.fieldLabel}>{t('Phone')}</Text>
                   <TextInput 
                     style={[styles.fieldInput, styles.disabledInput]} 
                     value={modalForm.phone} 
                     editable={false} 
                     placeholderTextColor="#A0AEC0"
                     accessible={true}
-                    accessibilityLabel="Phone Number (Non-editable)"
+                    accessibilityLabel={t('Phone Number (Non-editable)')}
                   />
                 </View>
                 <View style={styles.halfCol}>
@@ -843,8 +848,8 @@ export default function ProfileScreen() {
 
             <View style={styles.kycModalHeader}>
               <View>
-                <Text style={styles.kycModalTitle}>Verify PAN Card</Text>
-                <Text style={styles.modalSubTitleText}>Instantly verify identity using NSDL registry</Text>
+                <Text style={styles.kycModalTitle}>{t('Verify PAN Card')}</Text>
+                <Text style={styles.modalSubTitleText}>{t('Instantly verify identity using NSDL registry')}</Text>
               </View>
               <TouchableOpacity 
                 onPress={() => dispatchAction({ type: 'CLOSE_KYC_MODAL' })} 
@@ -852,7 +857,7 @@ export default function ProfileScreen() {
                 style={styles.closeBtn}
                 accessible={true}
                 accessibilityRole="button"
-                accessibilityLabel="Close verification window"
+                accessibilityLabel={t('Close verification window')}
               >
                 <Icon name="close" size={18} color="#718096" />
               </TouchableOpacity>
@@ -866,11 +871,11 @@ export default function ProfileScreen() {
               {/* Trust Badge */}
               <View style={styles.trustBadge}>
                 <Icon name="shield-check" size={16} color="#319795" />
-                <Text style={styles.trustBadgeText}>Income Tax Department Database Integration</Text>
+                <Text style={styles.trustBadgeText}>{t('Income Tax Department Database Integration')}</Text>
               </View>
 
               <View style={styles.fullCol}>
-                <Text style={styles.fieldLabel}>PAN Cardholder Name</Text>
+                <Text style={styles.fieldLabel}>{t('PAN Cardholder Name')}</Text>
                 <View style={[
                   styles.inputContainer,
                   focusedField === 'name' && { borderColor: theme.primary, backgroundColor: COLORS.white },
@@ -889,23 +894,23 @@ export default function ProfileScreen() {
                       const error = validateKycName(v);
                       dispatchAction({ type: 'SET_KYC_FIELD', payload: { key: 'name', value: v, error } });
                     }}
-                    placeholder="Enter full name as on PAN card"
+                    placeholder={t('Enter full name as on PAN card')}
                     placeholderTextColor="#A0AEC0"
                     autoCapitalize="words"
                     editable={!kycLoading}
                     onFocus={() => dispatchAction({ type: 'SET_FOCUSED_FIELD', payload: 'name' })}
                     onBlur={() => dispatchAction({ type: 'SET_FOCUSED_FIELD', payload: null })}
                     accessible={true}
-                    accessibilityLabel="PAN Cardholder Name"
-                    accessibilityHint="Enter cardholder name exactly as printed on the PAN card"
+                    accessibilityLabel={t('PAN Cardholder Name')}
+                    accessibilityHint={t('Enter cardholder name exactly as printed on the PAN card')}
                     accessibilityInvalid={!!kycErrors.name}
                   />
                 </View>
-                {kycErrors.name && <Text style={styles.errorText}>{kycErrors.name}</Text>}
+                {kycErrors.name && <Text style={styles.errorText}>{t(kycErrors.name)}</Text>}
               </View>
 
               <View style={styles.fullCol}>
-                <Text style={styles.fieldLabel}>PAN Number</Text>
+                <Text style={styles.fieldLabel}>{t('PAN Number')}</Text>
                 <View style={[
                   styles.inputContainer,
                   focusedField === 'pan' && { borderColor: theme.primary, backgroundColor: COLORS.white },
@@ -925,7 +930,7 @@ export default function ProfileScreen() {
                       const error = validatePan(uppercaseVal);
                       dispatchAction({ type: 'SET_KYC_FIELD', payload: { key: 'pan', value: uppercaseVal, error } });
                     }}
-                    placeholder="e.g. ABCDE1234F"
+                    placeholder={t('e.g. ABCDE1234F')}
                     placeholderTextColor="#A0AEC0"
                     autoCapitalize="characters"
                     maxLength={10}
@@ -933,12 +938,12 @@ export default function ProfileScreen() {
                     onFocus={() => dispatchAction({ type: 'SET_FOCUSED_FIELD', payload: 'pan' })}
                     onBlur={() => dispatchAction({ type: 'SET_FOCUSED_FIELD', payload: null })}
                     accessible={true}
-                    accessibilityLabel="PAN Number"
-                    accessibilityHint="Enter your 10 digit Permanent Account Number"
+                    accessibilityLabel={t('PAN Number')}
+                    accessibilityHint={t('Enter your 10 digit Permanent Account Number')}
                     accessibilityInvalid={!!kycErrors.pan}
                   />
                 </View>
-                {kycErrors.pan && <Text style={styles.errorText}>{kycErrors.pan}</Text>}
+                {kycErrors.pan && <Text style={styles.errorText}>{t(kycErrors.pan)}</Text>}
               </View>
 
               <TouchableOpacity 
@@ -948,7 +953,7 @@ export default function ProfileScreen() {
                 activeOpacity={0.85}
                 accessible={true}
                 accessibilityRole="button"
-                accessibilityLabel={kycLoading ? 'Verifying PAN' : 'Verify & Submit'}
+                accessibilityLabel={kycLoading ? t('Verifying PAN') : t('Verify & Submit')}
               >
                 {kycLoading ? (
                   <ActivityIndicator size="small" color={COLORS.white} />
@@ -956,12 +961,12 @@ export default function ProfileScreen() {
                   <Icon name="shield-check" size={20} color={COLORS.white} />
                 )}
                 <Text style={styles.saveBtnText}>
-                  {kycLoading ? 'Verifying PAN...' : 'Verify & Submit'}
+                  {kycLoading ? t('Verifying PAN...') : t('Verify & Submit')}
                 </Text>
               </TouchableOpacity>
 
               <Text style={styles.termsNote}>
-                🔒 Your security is our priority. PAN details are transmitted securely using high-grade encryption and are not stored permanently.
+                🔒 {t('Your security is our priority. PAN details are transmitted securely using high-grade encryption and are not stored permanently.')}
               </Text>
             </ScrollView>
           </View>
@@ -974,34 +979,36 @@ export default function ProfileScreen() {
 // ── sub-components ─────────────────────────────────────────────────────────────
 
 function FieldRow({ label, value, last }) {
+  const { t } = useTranslation();
   return (
-    <View style={[styles.fieldRow, !last && styles.fieldRowBorder]} accessible={true} accessibilityLabel={`${label}: ${value || 'Not provided'}`}>
-      <Text style={styles.fieldLabel}>{label}</Text>
+    <View style={[styles.fieldRow, !last && styles.fieldRowBorder]} accessible={true} accessibilityLabel={`${t(label)}: ${value || t('Not provided')}`}>
+      <Text style={styles.fieldLabel}>{t(label)}</Text>
       <Text style={styles.fieldVal}>{value || '—'}</Text>
     </View>
   );
 }
 
 function FormField({ label, fieldKey, form, errors, onChangeText, placeholder, keyboardType, autoCapitalize }) {
+  const { t } = useTranslation();
   const hasError    = !!errors[fieldKey];
   const inputStyle  = [styles.fieldInput, hasError && styles.inputError];
   return (
     <>
-      <Text style={styles.fieldLabel}>{label}</Text>
+      <Text style={styles.fieldLabel}>{t(label)}</Text>
       <TextInput
         style={inputStyle}
         value={form[fieldKey]}
         onChangeText={v => onChangeText(fieldKey, v)}
-        placeholder={placeholder}
+        placeholder={placeholder ? t(placeholder) : placeholder}
         placeholderTextColor="#A0AEC0"
         keyboardType={keyboardType}
         autoCapitalize={autoCapitalize}
         accessible={true}
-        accessibilityLabel={label}
-        accessibilityHint={`Edit your ${label}`}
+        accessibilityLabel={t(label)}
+        accessibilityHint={t('Edit your {field}').replace('{field}', t(label))}
         accessibilityInvalid={hasError}
       />
-      {hasError && <Text style={styles.errorText}>{errors[fieldKey]}</Text>}
+      {hasError && <Text style={styles.errorText}>{t(errors[fieldKey])}</Text>}
     </>
   );
 }

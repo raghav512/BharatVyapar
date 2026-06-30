@@ -1,108 +1,62 @@
 import api from '../api';
+import { normalizeCommodity, normalizeCommodityList } from '../normalizers/commodity.normalizer';
 
 const BASE_URL = '/sell-commodity';
 
 /**
  * Create a new sell commodity listing
- * Method: POST
- * Route: /api/sell-commodity/create
- * @param {FormData} data - multipart form data (files + fields)
- * @param {Object} options - extra fields that must be sent as typed JSON (not FormData strings)
- * @param {boolean} [options.isNegotiable] - sent as boolean query param so backend receives true boolean
+ * POST /api/sell-commodity/create
+ * @param {FormData} data - multipart form data
+ * @param {Object} options - { isNegotiable: boolean } — sent as query param (not FormData string)
+ * @param {Object} config  - axios config (e.g. { signal })
  */
 export const createSellCommodity = async (data, options = {}, config = {}) => {
-  console.log('[API] createSellCommodity called');
-  try {
-    const params = {};
-    // isNegotiable MUST be a boolean — FormData always serialises as string so we send via query param
-    if (typeof options.isNegotiable === 'boolean') {
-      params.isNegotiable = options.isNegotiable;
-    }
-    const response = await api.post(`${BASE_URL}/create`, data, { params, ...config });
-    console.log('[API] createSellCommodity success:', response.data);
-    return response.data;
-  } catch (error) {
-    console.error('[API] createSellCommodity error:', error);
-    throw error;
+  const params = {};
+  if (typeof options.isNegotiable === 'boolean') {
+    params.isNegotiable = options.isNegotiable;
   }
+  const response = await api.post(`${BASE_URL}/create`, data, { params, ...config });
+  return normalizeCommodity(response.data?.commodity || response.data?.data || response.data);
 };
 
 /**
- * Fetch all/filtered sell commodity listings (paginated)
- * Method: GET
- * Route: /api/sell-commodity/
- * @param {Object} params 
- * Query: status, sellerId, commodityName, type, page, limit
+ * Fetch all/filtered sell commodity listings
+ * GET /api/sell-commodity/
+ * @param {Object} params - { status, sellerId, commodityName, type, page, limit }
+ * @param {Object} config - axios config
  */
-export const getSellCommodities = async (params) => {
-  console.log('[API] getSellCommodities called with params:', params);
-  try {
-    const response = await api.get(`${BASE_URL}/`, { params });
-    console.log('[API] getSellCommodities success:', response.data);
-    return response.data;
-  } catch (error) {
-    console.error('[API] getSellCommodities error:', error);
-    throw error;
-  }
+export const getSellCommodities = async (params, config = {}) => {
+  const response = await api.get(`${BASE_URL}/`, { params, ...config });
+  return normalizeCommodityList(response.data);
 };
 
 /**
  * Fetch details of a specific sell commodity listing
- * Method: GET
- * Route: /api/sell-commodity/:id
- * @param {string} id 
+ * GET /api/sell-commodity/:id
  */
 export const getSellCommodityById = async (id) => {
-  console.log(`[API] getSellCommodityById called for id: ${id}`);
-  try {
-    const response = await api.get(`${BASE_URL}/${id}`);
-    console.log('[API] getSellCommodityById success:', response.data);
-    return response.data;
-  } catch (error) {
-    console.error('[API] getSellCommodityById error:', error);
-    throw error;
-  }
+  const response = await api.get(`${BASE_URL}/${id}`);
+  return normalizeCommodity(response.data?.commodity || response.data?.data || response.data);
 };
 
 /**
  * Update an existing sell commodity listing
- * Method: PATCH
- * Route: /api/sell-commodity/:id
- * @param {string} id
- * @param {FormData} data - multipart form data
- * @param {Object} options - extra typed fields
- * @param {boolean} [options.isNegotiable] - sent as boolean query param
+ * PATCH /api/sell-commodity/:id
  */
 export const updateSellCommodity = async (id, data, options = {}, config = {}) => {
-  console.log(`[API] updateSellCommodity called for id: ${id}`);
-  try {
-    const params = {};
-    if (typeof options.isNegotiable === 'boolean') {
-      params.isNegotiable = options.isNegotiable;
-    }
-    const response = await api.patch(`${BASE_URL}/${id}`, data, { params, ...config });
-    console.log('[API] updateSellCommodity success:', response.data);
-    return response.data;
-  } catch (error) {
-    console.error('[API] updateSellCommodity error:', error);
-    throw error;
+  const params = {};
+  if (typeof options.isNegotiable === 'boolean') {
+    params.isNegotiable = options.isNegotiable;
   }
+  const response = await api.patch(`${BASE_URL}/${id}`, data, { params, ...config });
+  return normalizeCommodity(response.data?.commodity || response.data?.data || response.data);
 };
 
 /**
  * Delete/cancel a sell commodity listing
- * Method: DELETE
- * Route: /api/sell-commodity/:id
- * @param {string} id 
+ * DELETE /api/sell-commodity/:id
  */
 export const deleteSellCommodity = async (id) => {
-  console.log(`[API] deleteSellCommodity called for id: ${id}`);
-  try {
-    const response = await api.delete(`${BASE_URL}/${id}`);
-    console.log('[API] deleteSellCommodity success:', response.data);
-    return response.data;
-  } catch (error) {
-    console.error('[API] deleteSellCommodity error:', error);
-    throw error;
-  }
+  const response = await api.delete(`${BASE_URL}/${id}`);
+  return response.data;
 };

@@ -8,14 +8,19 @@ const SplashScreen = ({ navigation }) => {
     // Prevent back button during splash
     const backHandler = BackHandler.addEventListener('hardwareBackPress', () => true);
     
-    // Navigate after 4 seconds
-    const timer = setTimeout(() => {
-      navigation.replace('RoleSelection');
-    }, 4000);
+    // Guard navigation timer to prevent crash when navigation is undefined
+    let timer = null;
+    if (navigation && typeof navigation.replace === 'function') {
+      timer = setTimeout(() => {
+        navigation.replace('RoleSelection');
+      }, 4000);
+    }
 
     return () => {
       backHandler.remove();
-      clearTimeout(timer);
+      if (timer) {
+        clearTimeout(timer);
+      }
     };
   }, [navigation]);
 

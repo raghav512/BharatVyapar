@@ -9,13 +9,13 @@ import {
   TextInput,
   RefreshControl,
   ActivityIndicator,
-  InteractionManager,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useSelector } from 'react-redux';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useFocusEffect } from '@react-navigation/native';
-import { selectUser, selectSelectedRole } from '../../../../store/authSelectors';
+import { selectResolvedRole } from '../../../../store/authSelectors';
+import { useTranslation } from '../../../../hook/useTranslation';
 import { SafeScreen } from '../../../../components/SafeScreen';
 import AppHeader from '../../../../components/AppHeader';
 import COLORS from '../../../../constant/colors';
@@ -24,7 +24,10 @@ import { showAlert } from '../../../../components/CustomAlertBox';
 import { getSellCommodities, deleteSellCommodity } from '../../../../service/sell/sellCommodity';
 import { getReceivedOffers } from '../../../../service/buy/buyCommodityService';
 import { getFriendlyErrorMessage } from '../../../../utils/errorUtils';
-
+import { normalizeCommodity } from '../../../../service/normalizers/commodity.normalizer';
+import { requirementService } from '../../../../service/trade/requirement.service';
+import { submitQuoteAgainstRequirement } from '../../../../service/trade/deal.service';
+import FulfillRequirementBottomSheet from '../../../../components/FulfillRequirementBottomSheet';
 const ROLE_THEMES = {
   FPO:       { primary: COLORS.fpoPrimary,       secondary: COLORS.fpoSecondary,       light: COLORS.fpoLight,       text: COLORS.fpoText },
   Trader:    { primary: COLORS.traderPrimary,    secondary: COLORS.traderSecondary,    light: COLORS.traderLight,    text: COLORS.traderText },
@@ -60,6 +63,7 @@ function getMoistureFromParams(params) {
 }
 
 // ─── Safe status label ────────────────────────────────────
+// ─── Safe status label ────────────────────────────────────
 function safeStatusLabel(status) {
   if (!status) return 'CLOSED';
   if (status === 'sold') return 'SOLD';
@@ -88,105 +92,20 @@ function safeDateDisplay(date) {
   }
 }
 
-// ─── Map raw API commodity → UI card + CommodityDetailsScreen item shape ──────
-function mapApiItem(raw) {
-  if (!raw || typeof raw !== 'object') return null;
-
-  try {
-    const seller = (raw.seller && typeof raw.seller === 'object')
-      ? raw.seller
-      : (raw.sellerId && typeof raw.sellerId === 'object')
-        ? raw.sellerId
-        : {};
-
-    const sellerName =
-      (seller.firstName && seller.lastName)
-        ? `${seller.firstName} ${seller.lastName}`.trim()
-        : seller.firstName?.trim() || seller.name?.trim() || 'Unknown Seller';
-
-    const sellerRole = seller.role && ROLE_THEMES[seller.role] ? seller.role : 'Trader';
-    const shopName = seller.shopName || seller.shopname || raw.shopName || raw.shopname || '';
-
-    const moisture = getMoistureFromParams(raw.qualityParameters);
-
-    const qualityParams = Array.isArray(raw.qualityParameters)
-      ? raw.qualityParameters
-          .filter(p => p?.parameterName || p?.name)
-          .map(p => ({
-            name: String(p?.parameterName || p?.name || '').trim(),
-            val:  String(p?.parameterValue || p?.val || '').trim(),
-          }))
-      : [];
-
-    const id = raw._id || raw.id;
-    if (!id) return null;
-
-    let sellerIdRaw = seller._id || seller.id;
-    if (!sellerIdRaw && typeof raw.sellerId === 'string') sellerIdRaw = raw.sellerId;
-    if (!sellerIdRaw && typeof raw.seller === 'string') sellerIdRaw = raw.seller;
-    const sellerId = sellerIdRaw ? String(sellerIdRaw) : null;
-
-    const rawTradeType = raw.tradeType || raw.deliveryType || null;
-    const normalizedTradeType = rawTradeType === 'EX_WAREHOUSE' ? 'EX-Warehouse' : rawTradeType;
-    const safeTradeType = ['FOR', 'EX-Warehouse'].includes(normalizedTradeType) ? normalizedTradeType : null;
-
-    return {
-      id:             String(id),
-      sellerId:       sellerId ? String(sellerId) : null,
-      crop:           String(raw.commodityName || '').trim() || '—',
-      variety:        String(raw.type          || '').trim() || null,
-      quantity:       `${raw.quantity ?? '?'} ${raw.unit || ''}`.trim(),
-      price:          raw.sellingPrice != null ? String(raw.sellingPrice) : null,
-      priceUnit:      String(raw.sellingPriceUnit || 'Qt'),
-      location:       String(raw.commodityLocation || '').trim() || '—',
-      moisture:       moisture ? String(moisture) : '—',
-      deliveryType:   safeTradeType,
-      isNegotiable:   raw.isNegotiable !== false,
-      status:         String(raw.status || 'active'),
-      publisherName:  sellerName,
-      publisherRole:  sellerRole,
-      listingEndDate: raw.listingEndDate || null,
-      shopName:       String(shopName || ''),
-
-      _fullItem: {
-        id:                    String(id),
-        commodityName:         String(raw.commodityName  || '—'),
-        type:                  String(raw.type           || '—'),
-        quantity:              String(raw.quantity       ?? ''),
-        unit:                  String(raw.unit           || ''),
-        sellingPrice:          raw.sellingPrice          ?? 0,
-        sellingPriceUnit:      String(raw.sellingPriceUnit || 'Qt'),
-        weightType:            String(raw.weightType     || 'Net Weight'),
-        listingEndDate:        safeDateDisplay(raw.listingEndDate) || '—',
-        weightTolerance:       String(raw.weightTolerance || '—'),
-        billingAddress:        String(raw.billingAddress  || '—'),
-        exWarehouseAddress:    raw.exWarehouseAddress || null,
-        paymentTimeline:       String(raw.paymentTimeline || '—'),
-        remarks:               String(raw.remarks         || ''),
-        deliveryType:          safeTradeType,
-        isNegotiable:          raw.isNegotiable !== false,
-        minimumAcceptablePrice: raw.minimumAcceptablePrice ?? null,
-        maxNegotiationRounds:  raw.maxNegotiationRounds  ?? 5,
-        offerExpiryHours:      raw.offerExpiryHours      ?? 24,
-        commodityLocation:     String(raw.commodityLocation || '—'),
-        escrowEnabled:         raw.escrowEnabled         ?? false,
-        buyerTransportAllowed: raw.buyerTransportAllowed ?? false,
-        grade:                 raw.grade                 || null,
-        moisture:              moisture ? String(moisture) : '—',
-        qualityParameters:     qualityParams,
-        sellerName,
-        shopName:              String(shopName || ''),
-        sellerRating:          typeof seller.rating           === 'number' ? seller.rating           : null,
-        sellerCompletedTrades: typeof seller.completedTrades  === 'number' ? seller.completedTrades  : null,
-        isSellerVerified:      seller.isVerified              ?? false,
-        commodityImages:       Array.isArray(raw.commodityImages) ? raw.commodityImages : [],
-        qualityReport:         Array.isArray(raw.qualityReport) ? raw.qualityReport : [],
-      },
-    };
-  } catch (e) {
-    if (__DEV__) console.warn('[mapApiItem] unexpected error:', e);
-    return null;
-  }
+// ─── Error Boundary Fallback UI Component ──────────────────────────────────────────
+function BoundaryFallback({ errorMessage, onReset }) {
+  const { t } = useTranslation();
+  return (
+    <View style={boundaryStyles.container}>
+      <Icon name="alert-circle-outline" size={56} color={COLORS.textMuted} />
+      <Text style={boundaryStyles.title}>{t('Something Went Wrong')}</Text>
+      <Text style={boundaryStyles.msg}>{t(errorMessage)}</Text>
+      <TouchableOpacity style={boundaryStyles.btn} onPress={onReset}>
+        <Icon name="refresh" size={16} color={COLORS.white} />
+        <Text style={boundaryStyles.btnText}>{t('Try Again')}</Text>
+      </TouchableOpacity>
+    </View>
+  );
 }
 
 // ─── Error Boundary ───────────────────────────────────────────────────────────────
@@ -216,15 +135,10 @@ class MarketplaceErrorBoundary extends React.Component {
   render() {
     if (this.state.hasError) {
       return (
-        <View style={boundaryStyles.container}>
-          <Icon name="alert-circle-outline" size={56} color={COLORS.textMuted} />
-          <Text style={boundaryStyles.title}>Something Went Wrong</Text>
-          <Text style={boundaryStyles.msg}>{this.state.errorMessage}</Text>
-          <TouchableOpacity style={boundaryStyles.btn} onPress={this.handleReset}>
-            <Icon name="refresh" size={16} color={COLORS.white} />
-            <Text style={boundaryStyles.btnText}>Try Again</Text>
-          </TouchableOpacity>
-        </View>
+        <BoundaryFallback
+          errorMessage={this.state.errorMessage}
+          onReset={this.handleReset}
+        />
       );
     }
     return this.props.children;
@@ -252,6 +166,7 @@ const INITIAL_STATE = {
   searchText:    '',
   selectedCrop:  'All',
   dynamicCrops:  ['All'],
+  activeTab:     'OFFERS', // 'OFFERS' or 'DEMANDS'
 };
 
 function marketplaceReducer(state, action) {
@@ -302,6 +217,14 @@ function marketplaceReducer(state, action) {
         selectedCrop: action.crop,
         searchText:   action.clearSearch ? '' : state.searchText,
       };
+    case 'SET_TAB':
+      return {
+        ...state,
+        activeTab: action.tab,
+        listings: [],
+        error: null,
+        loading: true
+      };
 
     case 'RESET_HAS_MORE':
       return { ...state, hasMore: true };
@@ -344,9 +267,9 @@ function offerCardPropsAreEqual(prev, next) {
   if (!po || !no) return po === no;
   return (
     po.id            === no.id            &&
-    po.crop          === no.crop          &&
+    po.name          === no.name          &&
     po.variety       === no.variety       &&
-    po.quantity      === no.quantity      &&
+    po.quantityLabel === no.quantityLabel &&
     po.price         === no.price         &&
     po.priceUnit     === no.priceUnit     &&
     po.location      === no.location      &&
@@ -354,16 +277,17 @@ function offerCardPropsAreEqual(prev, next) {
     po.isNegotiable  === no.isNegotiable  &&
     po.deliveryType  === no.deliveryType  &&
     po.status        === no.status        &&
-    po.publisherName === no.publisherName &&
-    po.publisherRole === no.publisherRole &&
+    po.sellerName    === no.sellerName    &&
+    po.sellerRole    === no.sellerRole    &&
     po.shopName      === no.shopName
   );
 }
 
 const OfferCard = React.memo(function OfferCard({ offer, theme, onPress, onEditPress, onDeletePress, isOwner }) {
+  const { t } = useTranslation();
   if (!offer || !theme) return null;
 
-  const roleTheme = ROLE_THEMES[offer.publisherRole] || theme;
+  const roleTheme = ROLE_THEMES[offer.sellerRole] || theme;
   const isExpired =
     offer.status === 'expired' ||
     offer.status === 'sold'    ||
@@ -371,7 +295,7 @@ const OfferCard = React.memo(function OfferCard({ offer, theme, onPress, onEditP
 
   const priceDisplay = safePriceDisplay(offer.price);
   
-  const accessibilityLabel = `Listing for ${offer.crop}${offer.variety ? ` variety ${offer.variety}` : ''}, quantity ${offer.quantity}, price ${priceDisplay ? `₹${priceDisplay} per ${offer.priceUnit}` : 'Negotiable'}, located in ${offer.location}. Published by ${offer.publisherName}${offer.shopName ? ` of ${offer.shopName}` : ''}. Status: ${offer.status}.`;
+  const accessibilityLabel = `Listing for ${offer.name}${offer.variety ? ` variety ${offer.variety}` : ''}, quantity ${offer.quantityLabel}, price ${priceDisplay ? `₹${priceDisplay} per ${offer.priceUnit}` : 'Negotiable'}, located in ${offer.location}. Published by ${offer.sellerName}${offer.shopName ? ` of ${offer.shopName}` : ''}. Status: ${offer.status}.`;
 
   return (
     <View
@@ -384,12 +308,12 @@ const OfferCard = React.memo(function OfferCard({ offer, theme, onPress, onEditP
         <View style={styles.publisherInfo}>
           <Icon name="account-circle-outline" size={13} color={COLORS.textMuted} />
           <Text style={styles.publisherName} numberOfLines={1}>
-            {offer.publisherName || 'Unknown'}{offer.shopName ? ` (${offer.shopName})` : ''}
+            {offer.sellerName || t('Unknown Seller')}{offer.shopName ? ` (${offer.shopName})` : ''}
           </Text>
         </View>
         <View style={[styles.roleBadge, { backgroundColor: roleTheme.primary + '18' }]}>
           <Text style={[styles.roleBadgeText, { color: roleTheme.primary }]}>
-            {offer.publisherRole || 'Seller'}
+            {offer.sellerRole || t('Seller')}
           </Text>
         </View>
       </View>
@@ -398,8 +322,8 @@ const OfferCard = React.memo(function OfferCard({ offer, theme, onPress, onEditP
       <View style={styles.offerHeader}>
         <View style={styles.cropInfoWrapper}>
           <Text style={styles.offerCrop} numberOfLines={1}>
-            {offer.crop || '—'}
-            {offer.variety ? ` (${offer.variety})` : ''}
+            {t(offer.name) || '—'}
+            {offer.variety ? ` (${t(offer.variety)})` : ''}
           </Text>
           <View style={styles.locationRow}>
             <Icon name="map-marker-outline" size={12} color={COLORS.textMuted} />
@@ -410,7 +334,7 @@ const OfferCard = React.memo(function OfferCard({ offer, theme, onPress, onEditP
         {isExpired && (
           <View style={styles.expiredBadge}>
             <Text style={styles.expiredBadgeText}>
-              {safeStatusLabel(offer.status)}
+              {t(safeStatusLabel(offer.status))}
             </Text>
           </View>
         )}
@@ -419,19 +343,19 @@ const OfferCard = React.memo(function OfferCard({ offer, theme, onPress, onEditP
       {/* Stats Row */}
       <View style={styles.detailsRow}>
         <View style={styles.detailCol}>
-          <Text style={styles.detailLabel}>Quantity</Text>
-          <Text style={styles.detailVal}>{offer.quantity || '—'}</Text>
+          <Text style={styles.detailLabel}>{t('Quantity')}</Text>
+          <Text style={styles.detailVal}>{offer.quantityLabel || '—'}</Text>
         </View>
 
         <View style={[styles.detailCol, styles.detailColCenter]}>
-          <Text style={styles.detailLabel}>Price / {offer.priceUnit || 'Qt'}</Text>
+          <Text style={styles.detailLabel}>{t('Price')} / {offer.priceUnit || 'Qt'}</Text>
           <Text style={[styles.detailVal, { color: theme.primary }]}>
-            {priceDisplay ? `₹${priceDisplay}` : 'N/A'}
+            {priceDisplay ? `₹${priceDisplay}` : t('N/A')}
           </Text>
         </View>
 
         <View style={styles.detailCol}>
-          <Text style={styles.detailLabel}>Moisture</Text>
+          <Text style={styles.detailLabel}>{t('Moisture')}</Text>
           <Text style={styles.detailVal}>{offer.moisture || '—'}</Text>
         </View>
       </View>
@@ -441,21 +365,21 @@ const OfferCard = React.memo(function OfferCard({ offer, theme, onPress, onEditP
         {offer.isNegotiable && (
           <View style={[styles.flag, { backgroundColor: theme.primary + '12' }]}>
             <Icon name="handshake-outline" size={11} color={theme.primary} />
-            <Text style={[styles.flagText, { color: theme.primary }]}>Negotiable</Text>
+            <Text style={[styles.flagText, { color: theme.primary }]}>{t('Negotiable')}</Text>
           </View>
         )}
 
         {offer.deliveryType === 'FOR' && (
           <View style={styles.flagFOR}>
             <Icon name="truck-delivery-outline" size={11} color="#388E3C" />
-            <Text style={styles.flagTextFOR}>FOR</Text>
+            <Text style={styles.flagTextFOR}>{t('FOR')}</Text>
           </View>
         )}
 
         {offer.deliveryType === 'EX-Warehouse' && (
           <View style={styles.flagWarehouse}>
             <Icon name="warehouse" size={11} color="#F57C00" />
-            <Text style={styles.flagTextWarehouse}>Ex-Warehouse</Text>
+            <Text style={styles.flagTextWarehouse}>{t('Ex-Warehouse')}</Text>
           </View>
         )}
       </View>
@@ -472,10 +396,10 @@ const OfferCard = React.memo(function OfferCard({ offer, theme, onPress, onEditP
                 accessible={true}
                 accessibilityRole="button"
                 accessibilityLabel="Delete Listing"
-                accessibilityHint={`Permanently deletes the listing for ${offer.crop}`}
+                accessibilityHint={`Permanently deletes the listing for ${offer.name}`}
               >
                 <Icon name="trash-can-outline" size={16} color={COLORS.error} />
-                <Text style={styles.deleteBtnText}>Delete</Text>
+                <Text style={styles.deleteBtnText}>{t('Delete')}</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -485,10 +409,10 @@ const OfferCard = React.memo(function OfferCard({ offer, theme, onPress, onEditP
                 accessible={true}
                 accessibilityRole="button"
                 accessibilityLabel="Edit Listing"
-                accessibilityHint={`Edits details of the listing for ${offer.crop}`}
+                accessibilityHint={`Edits details of the listing for ${offer.name}`}
               >
                 <Icon name="pencil-outline" size={16} color={theme.primary} />
-                <Text style={[styles.editBtnText, { color: theme.primary }]}>Edit</Text>
+                <Text style={[styles.editBtnText, { color: theme.primary }]}>{t('Edit')}</Text>
               </TouchableOpacity>
             </>
           )}
@@ -500,10 +424,10 @@ const OfferCard = React.memo(function OfferCard({ offer, theme, onPress, onEditP
             accessible={true}
             accessibilityRole="button"
             accessibilityLabel="View Listing Details"
-            accessibilityHint={`View detailed specifications and images of the listing for ${offer.crop}`}
+            accessibilityHint={`View detailed specifications and images of the listing for ${offer.name}`}
           >
             <Icon name="eye-outline" size={16} color={COLORS.white} />
-            <Text style={styles.viewBtnText}>View</Text>
+            <Text style={styles.viewBtnText}>{t('View')}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -511,23 +435,95 @@ const OfferCard = React.memo(function OfferCard({ offer, theme, onPress, onEditP
   );
 }, offerCardPropsAreEqual);
 
+// ─── Demand Card ───────────────────────────────────────────────────────────────
+const demandCardPropsAreEqual = (prev, next) => {
+  return (
+    prev.demand?.id === next.demand?.id &&
+    prev.theme?.primary === next.theme?.primary
+  );
+};
+
+const DemandCard = React.memo(({ demand, theme, t, onFulfillPress }) => {
+  if (!demand) return null;
+  return (
+    <View style={[styles.offerCard, { borderLeftColor: theme.primary }]}>
+      <View style={styles.cardHeader}>
+        <View style={styles.userRow}>
+          <View style={[styles.avatarBox, { backgroundColor: theme.primary + '20' }]}>
+            <Text style={[styles.avatarInitial, { color: theme.primary }]}>
+              {demand.buyerName ? demand.buyerName.substring(0, 1).toUpperCase() : 'B'}
+            </Text>
+          </View>
+          <Text style={styles.userName} numberOfLines={1}>
+            {demand.buyerName || t('Buyer')}
+          </Text>
+        </View>
+        <View style={[styles.roleBadge, { backgroundColor: '#F3F4F6' }]}>
+          <Text style={[styles.roleBadgeText, { color: '#4B5563' }]}>Demand</Text>
+        </View>
+      </View>
+
+      <View style={styles.offerHeader}>
+        <View style={styles.cropInfoWrapper}>
+          <Text style={styles.offerCrop} numberOfLines={1}>
+            {t(demand.commodity) || '—'}
+          </Text>
+          <View style={styles.locationRow}>
+            <Icon name="map-marker-outline" size={12} color={COLORS.textMuted} />
+            <Text style={styles.offerLocation}>{demand.location || '—'}</Text>
+          </View>
+        </View>
+      </View>
+
+      <View style={styles.detailsRow}>
+        <View style={styles.detailCol}>
+          <Text style={styles.detailLabel}>{t('Req Qty')}</Text>
+          <Text style={styles.detailVal}>{demand.quantity || '—'} Qt</Text>
+        </View>
+        <View style={[styles.detailCol, styles.detailColCenter]}>
+          <Text style={styles.detailLabel}>{t('Target Price')}</Text>
+          <Text style={[styles.detailVal, { color: theme.primary }]}>
+            ₹{demand.targetPrice || 'N/A'}
+          </Text>
+        </View>
+      </View>
+
+      <View style={styles.actionButtonsRow}>
+        <TouchableOpacity
+          style={[styles.actionBtn, styles.viewBtn, { backgroundColor: theme.primary, flex: 1, marginTop: 10 }]}
+          onPress={() => onFulfillPress && onFulfillPress(demand)}
+          activeOpacity={0.8}
+        >
+          <Icon name="handshake-outline" size={16} color={COLORS.white} />
+          <Text style={styles.viewBtnText}>{t('Quote / Fulfill')}</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}, demandCardPropsAreEqual);
+
+// Fallback helpers for requestIdleCallback / cancelIdleCallback
+const requestIdle = typeof requestIdleCallback !== 'undefined' ? requestIdleCallback : (cb) => setTimeout(cb, 50);
+const cancelIdle = typeof cancelIdleCallback !== 'undefined' ? cancelIdleCallback : clearTimeout;
+
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 function MarketplaceScreenInner({ route, navigation }) {
-  // PERFORMANCE FIX: Two granular selectors — MarketplaceScreenInner only
-  // re-renders when user or selectedRole change. Combined with the React.memo
-  // wrapper already on this component, this prevents cascading re-renders from
-  // any unrelated auth action.
-  const user      = useSelector(selectUser);
-  const stateRole = useSelector(selectSelectedRole);
-  const selectedRole = stateRole || user?.role || 'FPO';
+  // PERFORMANCE FIX: Select resolvedRole and currentUserId granularly.
+  // This prevents MarketplaceScreenInner from re-rendering on unrelated user object changes.
+  const selectedRole = useSelector(selectResolvedRole);
+  const currentUserId = useSelector(state => {
+    const raw = state.auth.user?._id || state.auth.user?.id;
+    return raw ? String(raw).trim() : '';
+  });
   const theme = ROLE_THEMES[selectedRole] || ROLE_THEMES.FPO;
+  const { t } = useTranslation();
 
   const bottomTabBarHeight = useBottomTabBarHeight();
 
   const [state, dispatch] = useReducer(marketplaceReducer, INITIAL_STATE);
   const {
     listings, loading, refreshing, loadingMore, searching,
-    error, hasMore, searchText, selectedCrop, dynamicCrops, isInitialLoad,
+    error, hasMore, searchText, selectedCrop, dynamicCrops, isInitialLoad, activeTab
   } = state;
 
   // Refs: isMounted guard, fetch lock, double-tap guard, page tracker, filter mirrors
@@ -537,12 +533,14 @@ function MarketplaceScreenInner({ route, navigation }) {
   const pageRef           = useRef(1);
   const searchTextRef     = useRef('');
   const selectedCropRef   = useRef('All');
+  const activeTabRef      = useRef('OFFERS');
   const hasListingsRef    = useRef(false);
   const isInitialLoadRef  = useRef(true);   // mirrors isInitialLoad state for use inside fetchListings closure
   const abortControllerRef = useRef(null);
   const fetchGenerationRef = useRef(0);
   const lastFetchTimeRef  = useRef(0);
   const searchTimeoutRef  = useRef(null);
+  const [selectedDemandForQuote, setSelectedDemandForQuote] = React.useState(null);
 
   // Single mount/unmount effect — initialize and cleanup isMountedRef + abort any in-flight request
   useEffect(() => {
@@ -556,18 +554,13 @@ function MarketplaceScreenInner({ route, navigation }) {
     };
   }, []);
 
-  // Memoize currentUserId so it doesn't change reference every render
-  const currentUserId = useMemo(() => {
-    const raw = user?._id || user?.id;
-    return raw ? String(raw).trim() : '';
-  }, [user?._id, user?.id]);
-
   const fetchListings = useCallback(async ({
     pageNum = 1,
     isRefresh = false,
     isBackground = false,
     search = searchTextRef.current,
     crop = selectedCropRef.current,
+    tab = activeTabRef.current,
   } = {}) => {
     // If loading a new page and already fetching, block it (no parallel page loads)
     if (pageNum > 1 && isFetchingRef.current) return;
@@ -612,43 +605,57 @@ function MarketplaceScreenInner({ route, navigation }) {
         params.commodityName = safeCrop;
       }
 
-      const response = await getSellCommodities(params, { signal: controller.signal });
+      let response;
+      if (tab === 'DEMANDS') {
+        response = await requirementService.getAllRequirements(); // Fetch from requirement service
+      } else {
+        response = await getSellCommodities(params, { signal: controller.signal });
+      }
 
       if (thisGeneration !== fetchGenerationRef.current) return;
       if (!isMountedRef.current) return;
 
-      const rawItems =
-        response?.data?.commodities ||
-        (Array.isArray(response?.data) ? response.data : null) ||
-        response?.commodities ||
-        response?.listings  ||
-        response?.docs      ||
-        response?.results   ||
-        (Array.isArray(response) ? response : []);
-
-      const items = Array.isArray(rawItems)
-        ? rawItems.reduce((acc, raw) => {
-            const mapped = mapApiItem(raw);
-            if (mapped) acc.push(mapped);
-            return acc;
-          }, [])
-        : [];
-
-      if (__DEV__ && Array.isArray(rawItems) && items.length < rawItems.length) {
-        console.warn(`[Marketplace] ⚠️ ${rawItems.length - items.length} item(s) skipped — malformed/missing _id`);
+      // Extract items: support arrays directly, or nested objects like response.data.requirements / response.data.commodities
+      let items = [];
+      if (Array.isArray(response)) {
+        items = response;
+      } else if (response) {
+        if (tab === 'DEMANDS') {
+          items = response.data?.requirements || response.requirements || (Array.isArray(response.data) ? response.data : []);
+        } else {
+          items = response.data?.commodities || response.commodities || response.data?.docs || response.docs || (Array.isArray(response.data) ? response.data : []);
+        }
+      }
+      if (!Array.isArray(items)) {
+        items = [];
       }
 
-      const totalDocs  = response?.data?.total || response?.total || response?.totalDocs || response?.count || items.length;
-      const totalPages = response?.data?.totalPages || response?.totalPages || Math.ceil(totalDocs / PAGE_SIZE) || 1;
+      // Local filtering for demands (since mock API doesn't support query filters)
+      if (tab === 'DEMANDS') {
+        const trimmedSearch = (typeof search === 'string' ? search : '').trim().toLowerCase();
+        const safeCrop = typeof crop === 'string' ? crop : 'All';
+        
+        items = items.filter(item => {
+          const matchCrop = safeCrop === 'All' || (item.commodity && item.commodity.toLowerCase() === safeCrop.toLowerCase());
+          const matchSearch = !trimmedSearch || (item.commodity && item.commodity.toLowerCase().includes(trimmedSearch)) || (item.location && item.location.toLowerCase().includes(trimmedSearch));
+          return matchCrop && matchSearch;
+        });
+      }
+
+      const totalDocs  = response?.total || response?.totalDocs || items.length;
+      const totalPages = response?.totalPages || Math.ceil(totalDocs / PAGE_SIZE) || 1;
       const nextHasMore = pageNum < totalPages && items.length === PAGE_SIZE;
 
       if (pageNum === 1 || isRefresh) {
         const cropSet = new Set();
         for (const item of items) {
-          if (item.crop && item.crop !== '\u2014') cropSet.add(item.crop);
+          const cropName = tab === 'DEMANDS' 
+            ? (item.commodity || item.commodityName || item.name) 
+            : (item.name || item.commodityName || item.commodity);
+          if (cropName && cropName !== '-') cropSet.add(cropName);
         }
         dispatch({
-          type:    'FETCH_SUCCESS_REPLACE',
+          type: 'FETCH_SUCCESS_REPLACE',
           items,
           crops:   ['All', ...cropSet],
           hasMore: nextHasMore,
@@ -698,7 +705,9 @@ function MarketplaceScreenInner({ route, navigation }) {
 
   useEffect(() => {
     if (rawUpdatedItem) {
-      const mapped = mapApiItem(rawUpdatedItem);
+      // rawUpdatedItem is a raw backend object from SellCommodities screen
+      // normalize it so UPDATE_ITEM gets same shape as items in state
+      const mapped = normalizeCommodity(rawUpdatedItem);
       if (mapped) dispatch({ type: 'UPDATE_ITEM', item: mapped });
       navigation.setParams({ rawUpdatedItem: null });
     }
@@ -706,17 +715,17 @@ function MarketplaceScreenInner({ route, navigation }) {
 
   useFocusEffect(
     useCallback(() => {
-      let interactionHandle;
-      const cacheExpiry = 60_000;
+      let idleHandle;
       const timeSinceLastFetch = Date.now() - lastFetchTimeRef.current;
 
       if (!hasListingsRef.current) {
         dispatch({ type: 'FETCH_START_FRESH' });
-        interactionHandle = InteractionManager.runAfterInteractions(() => {
+        idleHandle = requestIdle(() => {
           fetchListings({ pageNum: 1, isRefresh: false });
         });
-      } else if (timeSinceLastFetch > cacheExpiry) {
-        interactionHandle = InteractionManager.runAfterInteractions(() => {
+      } else {
+        // Force a background fetch on every screen focus to ensure we catch updates from other screens (like HomeScreen submit)
+        idleHandle = requestIdle(() => {
           fetchListings({ pageNum: 1, isBackground: true });
         });
       }
@@ -726,7 +735,9 @@ function MarketplaceScreenInner({ route, navigation }) {
       }, 300_000);
 
       return () => {
-        interactionHandle?.cancel();
+        if (idleHandle) {
+          cancelIdle(idleHandle);
+        }
         clearInterval(intervalTimer);
         abortControllerRef.current?.abort();
       };
@@ -746,8 +757,8 @@ function MarketplaceScreenInner({ route, navigation }) {
 
   const handleCardPress = useCallback((offer) => {
     if (!offer) return;
-    if (!offer._fullItem) {
-      showAlert({ type: 'error', title: 'Error', message: 'Could not load listing details. Please try again.' });
+    if (!offer.detail) {
+      showAlert({ type: 'error', title: t('Error'), message: t('Could not load listing details. Please try again.') });
       return;
     }
     if (!navigation) return;
@@ -755,26 +766,26 @@ function MarketplaceScreenInner({ route, navigation }) {
     const safeSellerId = offer.sellerId ? String(offer.sellerId) : '';
     const isOwner = Boolean(currentUserId && safeSellerId && currentUserId === safeSellerId);
     
-    const fullItem = { ...offer._fullItem, sellerId: offer.sellerId ?? null };
+    const fullItem = { ...offer.detail, sellerId: offer.sellerId ?? null };
     if (!isOwner) {
       delete fullItem.minimumAcceptablePrice;
     }
     
     navigation.navigate('CommodityDetails', { item: fullItem });
-  }, [navigation, currentUserId]);
+  }, [navigation, currentUserId, t]);
 
   const handleEditPress = useCallback((offer) => {
-    if (!offer?._fullItem || !navigation) return;
-    navigation.navigate('Sell', { editItem: offer._fullItem });
+    if (!offer?.detail || !navigation) return;
+    navigation.navigate('Sell', { editItem: offer.detail });
   }, [navigation]);
 
   const handleDeletePress = useCallback(async (offer) => {
     if (!offer?.id) {
-      showAlert({ type: 'error', title: 'Error', message: 'Cannot delete: listing ID is missing.' });
+      showAlert({ type: 'error', title: t('Error'), message: t('Cannot delete: listing ID is missing.') });
       return;
     }
 
-    const cropLabel = offer.crop && offer.crop !== '\u2014' ? `"${offer.crop}"` : 'this';
+    const cropLabel = offer.name && offer.name !== '\u2014' ? `"${offer.name}"` : 'this';
 
     try {
       const res = await getReceivedOffers(offer.id);
@@ -788,11 +799,11 @@ function MarketplaceScreenInner({ route, navigation }) {
       if (activeNegotiations.length > 0) {
         showAlert({
           type: 'warning',
-          title: '⚠️ Cannot Delete Listing',
+          title: t('⚠️ Cannot Delete Listing'),
           message:
-            `This listing cannot be deleted because it is currently involved in ${activeNegotiations.length} active negotiation deal${activeNegotiations.length > 1 ? 's' : ''} with buyer${activeNegotiations.length > 1 ? 's' : ''}.\n\nReason: Active buyer negotiations are in progress for this product. Deleting it would disrupt ongoing deals.\n\nPlease wait for all negotiations to conclude — either accepted, rejected, or expired — before removing this listing.`,
+            `${t('This listing cannot be deleted because it is currently involved in')} ${activeNegotiations.length} ${t('active negotiation deals')}.\n\n${t('Reason: Active buyer negotiations are in progress for this product. Deleting it would disrupt ongoing deals.')}\n\n${t('Please wait for all negotiations to conclude — either accepted, rejected, or expired — before removing this listing.')}`,
           buttons: [
-            { text: 'Got It', style: 'cancel' },
+            { text: t('Got It'), style: 'cancel' },
           ],
         });
         return;
@@ -803,12 +814,12 @@ function MarketplaceScreenInner({ route, navigation }) {
 
     showAlert({
       type: 'confirm',
-      title: 'Delete Listing',
-      message: `Are you sure you want to permanently delete ${cropLabel} listing? This action cannot be undone.`,
+      title: t('Delete Listing'),
+      message: `${t('Are you sure you want to permanently delete')} ${cropLabel} ${t('listing? This action cannot be undone.')}`,
       buttons: [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('Cancel'), style: 'cancel' },
         {
-          text: 'Delete',
+          text: t('Delete'),
           style: 'destructive',
           onPress: async () => {
             if (isDeletingRef.current) return;
@@ -820,15 +831,15 @@ function MarketplaceScreenInner({ route, navigation }) {
               }
               showAlert({
                 type: 'success',
-                title: 'Deleted Successfully',
-                message: 'The listing has been removed from the marketplace.',
+                title: t('Deleted Successfully'),
+                message: t('The listing has been removed from the marketplace.'),
               });
             } catch (err) {
               const friendlyMsg = getFriendlyErrorMessage(err?.message || err);
               showAlert({
                 type: 'error',
-                title: (err?.response?.status === 400 || err?.statusCode === 400) ? 'Cannot Delete' : 'Delete Failed',
-                message: friendlyMsg,
+                title: (err?.response?.status === 400 || err?.statusCode === 400) ? t('Cannot Delete') : t('Delete Failed'),
+                message: t(friendlyMsg),
               });
             } finally {
               isDeletingRef.current = false;
@@ -837,7 +848,7 @@ function MarketplaceScreenInner({ route, navigation }) {
         },
       ],
     });
-  }, []);
+  }, [t]);
 
   const handleSearchChange = useCallback((text) => {
     const safeText = typeof text === 'string' ? text : '';
@@ -904,10 +915,22 @@ function MarketplaceScreenInner({ route, navigation }) {
     });
   }, [fetchListings]);
 
-  const keyExtractor = useCallback((item) => item?.id ?? '', []);
+  const keyExtractor = useCallback((item) => item?.id ?? item?._id ?? '', []);
 
   const renderItem = useCallback(({ item }) => {
-    if (!item?.id) return null;
+    if (!item?.id && !item?._id) return null;
+    
+    if (activeTab === 'DEMANDS') {
+      return (
+        <DemandCard
+          demand={item}
+          theme={theme}
+          t={t}
+          onFulfillPress={(demand) => setSelectedDemandForQuote(demand)}
+        />
+      );
+    }
+
     const safeSellerId = item.sellerId ? String(item.sellerId) : '';
     const isOwner = Boolean(currentUserId && safeSellerId && currentUserId === safeSellerId);
     return (
@@ -920,7 +943,7 @@ function MarketplaceScreenInner({ route, navigation }) {
         isOwner={isOwner}
       />
     );
-  }, [theme, currentUserId, handleCardPress, handleEditPress, handleDeletePress]);
+  }, [theme, currentUserId, handleCardPress, handleEditPress, handleDeletePress, activeTab, t]);
 
   // Dynamic layout calculations & styles memoized before return to avoid inline recreations
   const flatListContentStyle = useMemo(() => [
@@ -947,49 +970,49 @@ function MarketplaceScreenInner({ route, navigation }) {
   const listFooter = useMemo(() => {
     if (loadingMore) {
       return (
-        <View style={styles.loadMoreContainer} accessible={true} accessibilityLabel="Loading more listings">
+        <View style={styles.loadMoreContainer} accessible={true} accessibilityLabel={t("Loading more listings")}>
           <ActivityIndicator size="small" color={theme.primary} />
-          <Text style={styles.loadMoreText}>Loading more listings…</Text>
+          <Text style={styles.loadMoreText}>{t('Loading more listings…')}</Text>
         </View>
       );
     }
     if (!hasMore && listings.length > 0) {
       return (
-        <View style={styles.endOfListContainer} accessible={true} accessibilityLabel="You have seen all active listings">
-          <Text style={styles.endOfListText}>— You've seen all active listings —</Text>
+        <View style={styles.endOfListContainer} accessible={true} accessibilityLabel={t("You have seen all active listings")}>
+          <Text style={styles.endOfListText}>{t('— You\'ve seen all active listings —')}</Text>
         </View>
       );
     }
     return <View style={styles.listBottomPadding} />;
-  }, [loadingMore, hasMore, listings.length, theme.primary]);
+  }, [loadingMore, hasMore, listings.length, theme.primary, t]);
 
   const listEmpty = useMemo(() => {
     if (loading) return null;
     const emptyText = searchText.trim()
-      ? `No active sell offers found for "${searchText.trim()}".`
+      ? `${t('No active sell offers found for')} "${searchText.trim()}".`
       : selectedCrop !== 'All'
-      ? `No active ${selectedCrop} listings right now.`
-      : 'No active sell listings at the moment.\nCheck back soon!';
+      ? `${t('No active')} ${t(selectedCrop)} ${t('listings right now.')}`
+      : t('No active sell listings at the moment.\nCheck back soon!');
 
     return (
       <View style={styles.emptyState} accessible={true}>
         <Icon name="store-alert-outline" size={56} color={COLORS.textMuted} />
-        <Text style={styles.emptyTitle}>No Listings Found</Text>
+        <Text style={styles.emptyTitle}>{t('No Listings Found')}</Text>
         <Text style={styles.emptyText}>{emptyText}</Text>
         <TouchableOpacity
           onPress={handleRefresh}
           style={[styles.retryBtn, { backgroundColor: theme.primary, marginTop: h(16) }]}
           accessible={true}
           accessibilityRole="button"
-          accessibilityLabel="Refresh list"
-          accessibilityHint="Refreshes the marketplace listings"
+          accessibilityLabel={t("Refresh list")}
+          accessibilityHint={t("Refreshes the marketplace listings")}
         >
           <Icon name="refresh" size={16} color={COLORS.white} />
-          <Text style={styles.retryText}>Refresh</Text>
+          <Text style={styles.retryText}>{t('Refresh')}</Text>
         </TouchableOpacity>
       </View>
     );
-  }, [loading, searchText, selectedCrop, handleRefresh, theme.primary]);
+  }, [loading, searchText, selectedCrop, handleRefresh, theme.primary, t]);
 
   useEffect(() => {
     if (listings.length > 0) hasListingsRef.current = true;
@@ -1002,25 +1025,25 @@ function MarketplaceScreenInner({ route, navigation }) {
   if (error && listings.length === 0) {
     return (
       <SafeScreen style={safeScreenStyle} top={false} bottom={false}>
-        <AppHeader backgroundColor={theme.primary} title="Agri Marketplace" subtitle="Trade crops at best market prices" showBackButton={false} />
+        <AppHeader backgroundColor={theme.primary} title={t("Agri Marketplace")} subtitle={t("Trade crops at best market prices")} showBackButton={false} />
         <View style={styles.errorContainer} accessible={true}>
           <Icon
             name={typeof error === 'string' && error.includes('connection') ? 'wifi-off' : 'store-alert-outline'}
             size={56}
             color={COLORS.textMuted}
           />
-          <Text style={styles.errorTitle}>Could Not Load Marketplace</Text>
-          <Text style={styles.errorMsg}>{error}</Text>
+          <Text style={styles.errorTitle}>{t('Could Not Load Marketplace')}</Text>
+          <Text style={styles.errorMsg}>{t(error)}</Text>
           <TouchableOpacity
             style={[styles.retryBtn, { backgroundColor: theme.primary }]}
             onPress={handleRetry}
             accessible={true}
             accessibilityRole="button"
-            accessibilityLabel="Try loading again"
-            accessibilityHint="Retries loading marketplace listings"
+            accessibilityLabel={t("Try loading again")}
+            accessibilityHint={t("Retries loading marketplace listings")}
           >
             <Icon name="refresh" size={18} color={COLORS.white} />
-            <Text style={styles.retryText}>Try Again</Text>
+            <Text style={styles.retryText}>{t('Try Again')}</Text>
           </TouchableOpacity>
         </View>
       </SafeScreen>
@@ -1031,10 +1054,25 @@ function MarketplaceScreenInner({ route, navigation }) {
     <SafeScreen style={safeScreenStyle} top={false} bottom={false}>
       <AppHeader
         backgroundColor={theme.primary}
-        title="Agri Marketplace"
-        subtitle="Browse live sell listings from FPOs & Traders"
+        title={t("Agri Marketplace")}
+        subtitle={activeTab === 'OFFERS' ? t("Browse live sell listings from FPOs & Traders") : t("Browse live requirements from Buyers")}
         showBackButton={false}
       />
+
+      <View style={styles.tabContainer}>
+        <TouchableOpacity 
+          style={[styles.tabBtn, activeTab === 'OFFERS' && { borderBottomColor: theme.primary, borderBottomWidth: 2 }]} 
+          onPress={() => { activeTabRef.current = 'OFFERS'; dispatch({type: 'SET_TAB', tab: 'OFFERS'}); fetchListings({tab: 'OFFERS', pageNum: 1}); }}
+        >
+          <Text style={[styles.tabText, activeTab === 'OFFERS' && {color: theme.primary, fontWeight: 'bold'}]}>{t('Market Offers')}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={[styles.tabBtn, activeTab === 'DEMANDS' && { borderBottomColor: theme.primary, borderBottomWidth: 2 }]} 
+          onPress={() => { activeTabRef.current = 'DEMANDS'; dispatch({type: 'SET_TAB', tab: 'DEMANDS'}); fetchListings({tab: 'DEMANDS', pageNum: 1}); }}
+        >
+          <Text style={[styles.tabText, activeTab === 'DEMANDS' && {color: theme.primary, fontWeight: 'bold'}]}>{t('Buyer Demands')}</Text>
+        </TouchableOpacity>
+      </View>
 
       <View style={styles.chipsWrapper}>
         <ScrollView
@@ -1052,12 +1090,12 @@ function MarketplaceScreenInner({ route, navigation }) {
                 onPress={() => handleChipPress(crop)}
                 accessible={true}
                 accessibilityRole="button"
-                accessibilityLabel={`${crop} filter`}
+                accessibilityLabel={`${t(crop)} ${t('filter')}`}
                 accessibilityState={{ selected: isSelected }}
-                accessibilityHint={`Filter marketplace listings by ${crop}`}
+                accessibilityHint={`${t('Filter marketplace listings by')} ${t(crop)}`}
               >
                 <Text style={[styles.chipText, isSelected && activeChipTextStyle]}>
-                  {crop}
+                  {t(crop)}
                 </Text>
               </TouchableOpacity>
             );
@@ -1070,7 +1108,7 @@ function MarketplaceScreenInner({ route, navigation }) {
         <Icon name="magnify" size={18} color={COLORS.textMuted} style={styles.searchIcon} />
         <TextInput
           style={styles.searchInput}
-          placeholder="Search commodity (Wheat, Soybean…)"
+          placeholder={t("Search commodity (Wheat, Soybean…)")}
           placeholderTextColor={COLORS.textMuted}
           value={searchText}
           onChangeText={handleSearchChange}
@@ -1078,8 +1116,8 @@ function MarketplaceScreenInner({ route, navigation }) {
           autoCorrect={false}
           autoCapitalize="none"
           accessible={true}
-          accessibilityLabel="Search commodity"
-          accessibilityHint="Enter a crop name to search active marketplace listings"
+          accessibilityLabel={t("Search commodity")}
+          accessibilityHint={t("Enter a crop name to search active marketplace listings")}
         />
         {searchText.length > 0 && (
           <TouchableOpacity
@@ -1088,8 +1126,8 @@ function MarketplaceScreenInner({ route, navigation }) {
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             accessible={true}
             accessibilityRole="button"
-            accessibilityLabel="Clear search text"
-            accessibilityHint="Clears the search input and displays all items for the selected crop"
+            accessibilityLabel={t("Clear search text")}
+            accessibilityHint={t("Clears the search input and displays all items for the selected crop")}
           >
             <Icon name="close-circle" size={16} color={COLORS.textMuted} />
           </TouchableOpacity>
@@ -1098,17 +1136,17 @@ function MarketplaceScreenInner({ route, navigation }) {
 
       {!loading && !error && listings.length > 0 && (
         <Text style={styles.resultsCount} accessibilityLiveRegion="polite">
-          {listings.length} active listing{listings.length !== 1 ? 's' : ''} found
-          {selectedCrop !== 'All' ? ` for ${selectedCrop}` : ''}
-          {searchText.trim() ? ` matching "${searchText.trim()}"` : ''}
+          {listings.length} {listings.length !== 1 ? t('active listings found') : t('active listing found')}
+          {selectedCrop !== 'All' ? ` ${t('for')} ${t(selectedCrop)}` : ''}
+          {searchText.trim() ? ` ${t('matching')} "${searchText.trim()}"` : ''}
         </Text>
       )}
 
       {/* Subtle searching spinner — shown during search/filter re-fetch, never wipes the list */}
       {searching && (
-        <View style={styles.searchingIndicator} accessible={true} accessibilityLabel="Searching listings">
+        <View style={styles.searchingIndicator} accessible={true} accessibilityLabel={t("Searching listings")}>
           <ActivityIndicator size="small" color={theme.primary} />
-          <Text style={[styles.searchingText, { color: theme.primary }]}>Searching…</Text>
+          <Text style={[styles.searchingText, { color: theme.primary }]}>{t('Searching…')}</Text>
         </View>
       )}
 
@@ -1133,8 +1171,8 @@ function MarketplaceScreenInner({ route, navigation }) {
           keyboardShouldPersistTaps="handled"
           removeClippedSubviews={true}
           maxToRenderPerBatch={8}
-          windowSize={10}
-          initialNumToRender={6}
+          windowSize={5}
+          initialNumToRender={5}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -1147,6 +1185,29 @@ function MarketplaceScreenInner({ route, navigation }) {
           ListEmptyComponent={listEmpty}
         />
       )}
+
+      <FulfillRequirementBottomSheet
+        visible={!!selectedDemandForQuote}
+        requirement={selectedDemandForQuote}
+        onClose={() => setSelectedDemandForQuote(null)}
+        onSubmit={async (payload) => {
+          try {
+            await submitQuoteAgainstRequirement(payload.requirementId, payload);
+            showAlert({
+              type: 'success',
+              title: t('Quote Submitted'),
+              message: t('Your quote has been sent to the buyer. You can track it in your Trades screen.'),
+            });
+            setSelectedDemandForQuote(null);
+          } catch (e) {
+            showAlert({
+              type: 'error',
+              title: t('Failed'),
+              message: t('Could not submit quote. Please try again.'),
+            });
+          }
+        }}
+      />
     </SafeScreen>
   );
 }
@@ -1577,5 +1638,20 @@ const styles = StyleSheet.create({
   searchingText: {
     fontSize: f(11),
     fontWeight: '600',
+  },
+  tabContainer: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.white,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  tabBtn: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: h(12),
+  },
+  tabText: {
+    fontSize: f(13),
+    color: '#6B7280',
   },
 });

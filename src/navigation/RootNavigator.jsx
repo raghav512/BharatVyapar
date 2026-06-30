@@ -1,9 +1,10 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { NavigationContainer } from '@react-navigation/native';
-import { selectAuthToken, selectUser, selectIsAuthChecked } from '../store/authSelectors';
+import { selectIsAuthenticated, selectIsAuthChecked } from '../store/authSelectors';
 
 import { checkStoredToken, clearAuth } from '../store/authSlice';
+import { initializeLanguageThunk } from '../store/languageSlice';
 import { setUnauthorizedCallback } from '../service/api';
 
 import SplashScreen from '../screen/SplashScreen';
@@ -14,11 +15,19 @@ export default function RootNavigator() {
   const dispatch = useDispatch();
   // PERFORMANCE FIX: Three separate subscriptions instead of one whole-slice
   // selector. Each only re-renders RootNavigator when its specific field changes.
-  const token         = useSelector(selectAuthToken);
-  const user          = useSelector(selectUser);
-  const isAuthChecked = useSelector(selectIsAuthChecked);
+  const isAuthenticated = useSelector(selectIsAuthenticated);
+  const isAuthChecked   = useSelector(selectIsAuthChecked);
 
-  const isAuthenticated = Boolean(token && user);
+  const [isLangInitialized, setIsLangInitialized] = useState(false);
+
+  useEffect(() => {
+    dispatch(initializeLanguageThunk())
+      .unwrap()
+      .catch(() => {})
+      .finally(() => {
+        setIsLangInitialized(true);
+      });
+  }, [dispatch]);
 
   useEffect(() => {
     // Small delay before checking token
@@ -39,7 +48,7 @@ export default function RootNavigator() {
     };
   }, [dispatch]);
 
-  if (!isAuthChecked) {
+  if (!isAuthChecked || !isLangInitialized) {
     return <SplashScreen />;
   }
 

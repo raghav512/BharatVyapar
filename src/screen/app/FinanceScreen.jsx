@@ -17,6 +17,7 @@ import { w, h, mw, f } from '../../utils/responsive';
 import { showAlert } from '../../components/CustomAlertBox';
 import { SafeScreen } from '../../components/SafeScreen';
 import { selectUser } from '../../store/authSelectors';
+import { useTranslation } from '../../hook/useTranslation';
 
 const LENDING_PARTNERS = [
   { name: 'State Bank of India', rate: '8.40% p.a.', processing: '0.5%' },
@@ -50,6 +51,7 @@ const ACTIVE_LOANS = [
 
 export default function FinanceScreen() {
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
   // PERFORMANCE FIX: Single granular selector — FinanceScreen only needs user.role
   // for theming. Subscribing to the entire auth slice caused re-renders from
   // unrelated auth actions (profileLoading, sendOtpError, etc.).
@@ -81,16 +83,19 @@ export default function FinanceScreen() {
 
   const submitLoanApplication = () => {
     if (!applyWhReceipt || !applyQty) {
-      Alert.alert('Error', 'Please fill all required details');
+      Alert.alert(t('Error'), t('Please fill all required details'));
       return;
     }
     setLoanModalVisible(false);
 
     showAlert({
       type: 'info',
-      title: 'Application Received!',
-      message: `Your Warehouse Receipt Loan application of ${applyQty} MT at ${applyWhReceipt} has been submitted to ${applyPartner}. Status will update within 24 hours.`,
-      buttons: [{ text: 'Great', style: 'default' }],
+      title: t('Application Received!'),
+      message: t("Your Warehouse Receipt Loan application of {quantity} MT at {warehouse} has been submitted to {partner}. Status will update within 24 hours.")
+        .replace('{quantity}', applyQty)
+        .replace('{warehouse}', applyWhReceipt)
+        .replace('{partner}', applyPartner),
+      buttons: [{ text: t('Great'), style: 'default' }],
     });
 
     setApplyWhReceipt('');
@@ -101,8 +106,8 @@ export default function FinanceScreen() {
     <SafeScreen style={styles.container} top={false} bottom={true}>
       {/* Header */}
       <View style={[styles.header, { backgroundColor: roleColor, paddingTop: insets.top + h(10) }]}>
-        <Text style={styles.headerTitle}>Finance & Loans</Text>
-        <Text style={styles.headerSubtitle}>Instant warehouse receipt financing at lowest rates</Text>
+        <Text style={styles.headerTitle}>{t('Finance & Loans')}</Text>
+        <Text style={styles.headerSubtitle}>{t('Instant warehouse receipt financing at lowest rates')}</Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
@@ -110,14 +115,14 @@ export default function FinanceScreen() {
         <View style={styles.sectionCard}>
           <View style={styles.sectionHeader}>
             <Icon name="calculator-variant" size={22} color={roleColor} />
-            <Text style={styles.sectionTitle}>Loan Eligibility Calculator</Text>
+            <Text style={styles.sectionTitle}>{t('Loan Eligibility Calculator')}</Text>
           </View>
-          <Text style={styles.sectionSubtitle}>Check instant LTV based eligibility (Up to 70%)</Text>
+          <Text style={styles.sectionSubtitle}>{t('Check instant LTV based eligibility (Up to 70%)')}</Text>
 
-          <Text style={styles.inputLabel}>Commodity *</Text>
+          <Text style={styles.inputLabel}>{t('Commodity *')}</Text>
           <TextInput
             style={styles.calcInput}
-            placeholder="e.g. Wheat"
+            placeholder={t('e.g. Wheat')}
             placeholderTextColor={COLORS.textMuted}
             value={calcCommodity}
             onChangeText={setCalcCommodity}
@@ -125,22 +130,22 @@ export default function FinanceScreen() {
 
           <View style={styles.rowInputs}>
             <View style={{ flex: 1, marginRight: w(8) }}>
-              <Text style={styles.inputLabel}>Quantity (MT) *</Text>
+              <Text style={styles.inputLabel}>{t('Quantity (MT) *')}</Text>
               <TextInput
                 style={styles.calcInput}
                 keyboardType="numeric"
-                placeholder="e.g. 50"
+                placeholder={t('e.g. 50')}
                 placeholderTextColor={COLORS.textMuted}
                 value={calcQuantity}
                 onChangeText={setCalcQuantity}
               />
             </View>
             <View style={{ flex: 1, marginLeft: w(8) }}>
-              <Text style={styles.inputLabel}>Market Price (₹/Qtl) *</Text>
+              <Text style={styles.inputLabel}>{t('Market Price (₹/Qtl) *')}</Text>
               <TextInput
                 style={styles.calcInput}
                 keyboardType="numeric"
-                placeholder="e.g. 2400"
+                placeholder={t('e.g. 2400')}
                 placeholderTextColor={COLORS.textMuted}
                 value={calcPrice}
                 onChangeText={setCalcPrice}
@@ -151,11 +156,11 @@ export default function FinanceScreen() {
           {quantityNum > 0 && priceNum > 0 && (
             <View style={[styles.calcResultsBox, { borderLeftColor: roleColor }]}>
               <View style={styles.resultItem}>
-                <Text style={styles.resultLabel}>Est. Market Value</Text>
+                <Text style={styles.resultLabel}>{t('Est. Market Value')}</Text>
                 <Text style={styles.resultValue}>₹{estimatedMarketValue.toLocaleString('en-IN')}</Text>
               </View>
               <View style={styles.resultItem}>
-                <Text style={styles.resultLabel}>Max Eligible Loan (70% LTV)</Text>
+                <Text style={styles.resultLabel}>{t('Max Eligible Loan (70% LTV)')}</Text>
                 <Text style={[styles.resultValue, { color: COLORS.success, fontSize: f(18) }]}>
                   ₹{maxLoanAmount.toLocaleString('en-IN')}
                 </Text>
@@ -167,12 +172,12 @@ export default function FinanceScreen() {
             onPress={() => setLoanModalVisible(true)}
             style={[styles.applyButton, { backgroundColor: roleColor }]}
           >
-            <Text style={styles.applyButtonText}>Apply for Loan Now</Text>
+            <Text style={styles.applyButtonText}>{t('Apply for Loan Now')}</Text>
           </TouchableOpacity>
         </View>
 
         {/* Active Loans */}
-        <Text style={styles.listHeading}>Active Finance Ledger</Text>
+        <Text style={styles.listHeading}>{t('Active Finance Ledger')}</Text>
         {ACTIVE_LOANS.map(loan => {
           const isActive = loan.status === 'Active';
           return (
@@ -181,27 +186,27 @@ export default function FinanceScreen() {
                 <View>
                   <Text style={styles.loanId}>{loan.id}</Text>
                   <Text style={styles.loanDesc}>
-                    {loan.commodity} ({loan.quantity}) at {loan.warehouse}
+                    {t(loan.commodity)} ({t(loan.quantity)}) at {t(loan.warehouse)}
                   </Text>
                 </View>
                 <View style={[styles.statusBadge, { backgroundColor: isActive ? '#E6F4EA' : '#FEF3C7' }]}>
                   <Text style={[styles.statusText, { color: isActive ? '#137333' : '#D97706' }]}>
-                    {loan.status}
+                    {t(loan.status)}
                   </Text>
                 </View>
               </View>
 
               <View style={styles.loanDetailsGrid}>
                 <View style={styles.loanDetailItem}>
-                  <Text style={styles.loanDetailLabel}>Amount</Text>
+                  <Text style={styles.loanDetailLabel}>{t('Amount')}</Text>
                   <Text style={[styles.loanDetailVal, { color: roleColor }]}>{loan.loanAmount}</Text>
                 </View>
                 <View style={styles.loanDetailItem}>
-                  <Text style={styles.loanDetailLabel}>Interest Rate</Text>
-                  <Text style={styles.loanDetailVal}>{loan.interestRate} p.a.</Text>
+                  <Text style={styles.loanDetailLabel}>{t('Interest Rate')}</Text>
+                  <Text style={styles.loanDetailVal}>{loan.interestRate} {t('p.a.')}</Text>
                 </View>
                 <View style={styles.loanDetailItem}>
-                  <Text style={styles.loanDetailLabel}>Due Date</Text>
+                  <Text style={styles.loanDetailLabel}>{t('Due Date')}</Text>
                   <Text style={styles.loanDetailVal}>{loan.dueDate}</Text>
                 </View>
               </View>
@@ -210,7 +215,7 @@ export default function FinanceScreen() {
         })}
 
         {/* Lending Partners */}
-        <Text style={styles.listHeading}>Lending Banking Partners</Text>
+        <Text style={styles.listHeading}>{t('Lending Banking Partners')}</Text>
         <View style={styles.partnerList}>
           {LENDING_PARTNERS.map((partner, index) => (
             <View key={index} style={styles.partnerCard}>
@@ -218,9 +223,11 @@ export default function FinanceScreen() {
                 <Icon name="bank" size={24} color={roleColor} />
               </View>
               <View style={{ flex: 1, marginLeft: w(12) }}>
-                <Text style={styles.partnerName}>{partner.name}</Text>
+                <Text style={styles.partnerName}>{t(partner.name)}</Text>
                 <Text style={styles.partnerDetails}>
-                  Rate: {partner.rate} | Processing Fee: {partner.processing}
+                  {t("Rate: {rate} | Processing Fee: {processing}")
+                    .replace('{rate}', partner.rate)
+                    .replace('{processing}', partner.processing)}
                 </Text>
               </View>
             </View>
@@ -238,32 +245,32 @@ export default function FinanceScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Apply for Commodity Loan</Text>
+              <Text style={styles.modalTitle}>{t('Apply for Commodity Loan')}</Text>
               <TouchableOpacity onPress={() => setLoanModalVisible(false)}>
                 <Icon name="close" size={24} color={COLORS.text} />
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.inputLabel}>Warehouse Receipt ID / Lot Number *</Text>
+            <Text style={styles.inputLabel}>{t('Warehouse Receipt ID / Lot Number *')}</Text>
             <TextInput
               style={styles.modalInput}
-              placeholder="e.g. WHR-849302"
+              placeholder={t('e.g. WHR-849302')}
               placeholderTextColor={COLORS.textMuted}
               value={applyWhReceipt}
               onChangeText={setApplyWhReceipt}
             />
 
-            <Text style={styles.inputLabel}>Lot Quantity (MT) *</Text>
+            <Text style={styles.inputLabel}>{t('Lot Quantity (MT) *')}</Text>
             <TextInput
               style={styles.modalInput}
               keyboardType="numeric"
-              placeholder="e.g. 60"
+              placeholder={t('e.g. 60')}
               placeholderTextColor={COLORS.textMuted}
               value={applyQty}
               onChangeText={setApplyQty}
             />
 
-            <Text style={styles.inputLabel}>Preferred Banking Partner *</Text>
+            <Text style={styles.inputLabel}>{t('Preferred Banking Partner *')}</Text>
             <View style={styles.partnerPicker}>
               {LENDING_PARTNERS.map(p => {
                 const isSelected = applyPartner === p.name;
@@ -277,7 +284,7 @@ export default function FinanceScreen() {
                     ]}
                   >
                     <Text style={[styles.pickerText, isSelected && { color: roleColor, fontWeight: '700' }]}>
-                      {p.name}
+                      {t(p.name)}
                     </Text>
                   </TouchableOpacity>
                 );
@@ -288,7 +295,7 @@ export default function FinanceScreen() {
               onPress={submitLoanApplication}
               style={[styles.submitButton, { backgroundColor: roleColor }]}
             >
-              <Text style={styles.submitButtonText}>Submit Loan Application</Text>
+              <Text style={styles.submitButtonText}>{t('Submit Loan Application')}</Text>
             </TouchableOpacity>
           </View>
         </View>

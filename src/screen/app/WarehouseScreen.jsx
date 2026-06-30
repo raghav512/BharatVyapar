@@ -17,6 +17,7 @@ import { w, h, mw, f } from '../../utils/responsive';
 import { showAlert } from '../../components/CustomAlertBox';
 import { SafeScreen } from '../../components/SafeScreen';
 import { selectUser } from '../../store/authSelectors';
+import { useTranslation } from '../../hook/useTranslation';
 
 const WAREHOUSES = [
   {
@@ -71,6 +72,7 @@ const WAREHOUSES = [
 
 export default function WarehouseScreen() {
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
   // PERFORMANCE FIX: Single granular selector — WarehouseScreen only needs
   // user.role for theming. Subscribing to the entire auth slice caused
   // re-renders from unrelated auth actions (profileLoading, sendOtpError, etc.).
@@ -114,7 +116,7 @@ export default function WarehouseScreen() {
 
   const submitBooking = () => {
     if (!commodity || !quantity || !duration) {
-      Alert.alert('Error', 'Please fill all details');
+      Alert.alert(t('Error'), t('Please fill all details'));
       return;
     }
     setBookingModalVisible(false);
@@ -122,9 +124,13 @@ export default function WarehouseScreen() {
     // Show premium alert
     showAlert({
       type: 'info',
-      title: 'Booking Confirmed!',
-      message: `Successfully booked storage for ${quantity} MT of ${commodity} at ${selectedWarehouse.name} for ${duration} months. Our agent will call you for quality verification.`,
-      buttons: [{ text: 'OK', style: 'default' }],
+      title: t('Booking Confirmed!'),
+      message: t("Successfully booked storage for {quantity} MT of {commodity} at {warehouse} for {duration} months. Our agent will call you for quality verification.")
+        .replace('{quantity}', quantity)
+        .replace('{commodity}', commodity)
+        .replace('{warehouse}', selectedWarehouse.name)
+        .replace('{duration}', duration),
+      buttons: [{ text: t('OK'), style: 'default' }],
     });
 
     // Reset form
@@ -136,19 +142,20 @@ export default function WarehouseScreen() {
   const handleTransferPress = (wh) => {
     showAlert({
       type: 'confirm',
-      title: 'Transfer Stored Stock',
-      message: `Would you like to initiate a warehouse receipt transfer or release ownership of stored commodities at ${wh.name}?`,
+      title: t('Transfer Stored Stock'),
+      message: t("Would you like to initiate a warehouse receipt transfer or release ownership of stored commodities at {warehouse}?")
+        .replace('{warehouse}', wh.name),
       buttons: [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('Cancel'), style: 'cancel' },
         {
-          text: 'Initiate Transfer',
+          text: t('Initiate Transfer'),
           style: 'default',
           onPress: () => {
             showAlert({
               type: 'info',
-              title: 'Initiated Successfully',
-              message: 'Ownership transfer request raised. Our representative will verify warehouse receipts.',
-              buttons: [{ text: 'OK' }]
+              title: t('Initiated Successfully'),
+              message: t('Ownership transfer request raised. Our representative will verify warehouse receipts.'),
+              buttons: [{ text: t('OK') }]
             });
           }
         }
@@ -160,8 +167,8 @@ export default function WarehouseScreen() {
     <SafeScreen style={styles.container} top={false} bottom={true}>
       {/* Header */}
       <View style={[styles.header, { backgroundColor: roleColor, paddingTop: insets.top + h(10) }]}>
-        <Text style={styles.headerTitle}>Warehouse Storage</Text>
-        <Text style={styles.headerSubtitle}>Search, compare, and book verified storage online</Text>
+        <Text style={styles.headerTitle}>{t('Warehouse Storage')}</Text>
+        <Text style={styles.headerSubtitle}>{t('Search, compare, and book verified storage online')}</Text>
       </View>
 
       {/* Search & Filter */}
@@ -169,7 +176,7 @@ export default function WarehouseScreen() {
         <View style={styles.searchBar}>
           <Icon name="magnify" size={24} color={COLORS.textMuted} />
           <TextInput
-            placeholder="Search city, state or warehouse name"
+            placeholder={t('Search city, state or warehouse name')}
             placeholderTextColor={COLORS.textMuted}
             style={styles.searchInput}
             value={searchQuery}
@@ -195,7 +202,7 @@ export default function WarehouseScreen() {
                 ]}
               >
                 <Text style={[styles.filterChipText, isActive && styles.activeChipText]}>
-                  {cat}
+                  {t(cat)}
                 </Text>
               </TouchableOpacity>
             );
@@ -226,7 +233,7 @@ export default function WarehouseScreen() {
             <View style={styles.tagsContainer}>
               {wh.features.map((feat, index) => (
                 <View key={index} style={styles.tagBadge}>
-                  <Text style={styles.tagText}>{feat}</Text>
+                  <Text style={styles.tagText}>{t(feat)}</Text>
                 </View>
               ))}
             </View>
@@ -234,22 +241,22 @@ export default function WarehouseScreen() {
             {/* Info specs */}
             <View style={styles.specsRow}>
               <View style={styles.specItem}>
-                <Text style={styles.specLabel}>Capacity</Text>
-                <Text style={styles.specVal}>{wh.capacity}</Text>
+                <Text style={styles.specLabel}>{t('Capacity')}</Text>
+                <Text style={styles.specVal}>{t(wh.capacity)}</Text>
               </View>
               <View style={styles.specItem}>
-                <Text style={styles.specLabel}>Available</Text>
-                <Text style={[styles.specVal, { color: COLORS.success }]}>{wh.available}</Text>
+                <Text style={styles.specLabel}>{t('Available')}</Text>
+                <Text style={[styles.specVal, { color: COLORS.success }]}>{t(wh.available)}</Text>
               </View>
               <View style={styles.specItem}>
-                <Text style={styles.specLabel}>Price</Text>
-                <Text style={[styles.specVal, { color: roleColor }]}>{wh.pricePerTon}</Text>
+                <Text style={styles.specLabel}>{t('Price')}</Text>
+                <Text style={[styles.specVal, { color: roleColor }]}>{t(wh.pricePerTon)}</Text>
               </View>
             </View>
 
             {/* Suitable Crops */}
             <Text style={styles.cropsLabel}>
-              Suitable for: <Text style={styles.cropsVal}>{wh.suitableFor.join(', ')}</Text>
+              {t('Suitable for:')} <Text style={styles.cropsVal}>{wh.suitableFor.map(c => t(c)).join(', ')}</Text>
             </Text>
 
             {/* Action Buttons */}
@@ -259,7 +266,7 @@ export default function WarehouseScreen() {
                 style={[styles.bookButton, { backgroundColor: roleColor, flex: 1 }]}
               >
                 <Icon name="calendar-check" size={18} color={COLORS.white} />
-                <Text style={styles.bookButtonText}>Book Storage</Text>
+                <Text style={styles.bookButtonText}>{t('Book Storage')}</Text>
               </TouchableOpacity>
 
               {(selectedRole === 'Trader' || selectedRole === 'Corporate') && (
@@ -268,7 +275,7 @@ export default function WarehouseScreen() {
                   style={[styles.transferButton, { borderColor: roleColor }]}
                 >
                   <Icon name="swap-horizontal" size={18} color={roleColor} />
-                  <Text style={[styles.transferButtonText, { color: roleColor }]}>Transfer Stock</Text>
+                  <Text style={[styles.transferButtonText, { color: roleColor }]}>{t('Transfer Stock')}</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -278,7 +285,7 @@ export default function WarehouseScreen() {
         {filteredWarehouses.length === 0 && (
           <View style={styles.emptyContainer}>
             <Icon name="warehouse" size={64} color={COLORS.textMuted} />
-            <Text style={styles.emptyText}>No warehouses found matching filters.</Text>
+            <Text style={styles.emptyText}>{t('No warehouses found matching filters.')}</Text>
           </View>
         )}
       </ScrollView>
@@ -294,7 +301,7 @@ export default function WarehouseScreen() {
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
               <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Book Storage Space</Text>
+                <Text style={styles.modalTitle}>{t('Book Storage Space')}</Text>
                 <TouchableOpacity onPress={() => setBookingModalVisible(false)}>
                   <Icon name="close" size={24} color={COLORS.text} />
                 </TouchableOpacity>
@@ -304,29 +311,29 @@ export default function WarehouseScreen() {
               <Text style={styles.modalWhLoc}>{selectedWarehouse.location}</Text>
 
               {/* Form fields */}
-              <Text style={styles.inputLabel}>Commodity Type</Text>
+              <Text style={styles.inputLabel}>{t('Commodity Type')}</Text>
               <TextInput
                 style={styles.modalInput}
-                placeholder="e.g. Wheat, Soybean"
+                placeholder={t('e.g. Wheat, Soybean')}
                 placeholderTextColor={COLORS.textMuted}
                 value={commodity}
                 onChangeText={setCommodity}
               />
 
-              <Text style={styles.inputLabel}>Quantity (MT)</Text>
+              <Text style={styles.inputLabel}>{t('Quantity (MT)')}</Text>
               <TextInput
                 style={styles.modalInput}
-                placeholder="e.g. 50"
+                placeholder={t('e.g. 50')}
                 keyboardType="numeric"
                 placeholderTextColor={COLORS.textMuted}
                 value={quantity}
                 onChangeText={setQuantity}
               />
 
-              <Text style={styles.inputLabel}>Duration (Months)</Text>
+              <Text style={styles.inputLabel}>{t('Duration (Months)')}</Text>
               <TextInput
                 style={styles.modalInput}
-                placeholder="e.g. 3"
+                placeholder={t('e.g. 3')}
                 keyboardType="numeric"
                 placeholderTextColor={COLORS.textMuted}
                 value={duration}
@@ -336,11 +343,11 @@ export default function WarehouseScreen() {
               {/* Estimate calculation */}
               {quantity !== '' && duration !== '' && (
                 <View style={styles.calcBox}>
-                  <Text style={styles.calcTitle}>Estimated Cost</Text>
+                  <Text style={styles.calcTitle}>{t('Estimated Cost')}</Text>
                   <Text style={[styles.calcValue, { color: roleColor }]}>
-                    ₹{estimatedCost.toLocaleString('en-IN')} / total duration
+                    {t("₹{cost} / total duration").replace('{cost}', estimatedCost.toLocaleString('en-IN'))}
                   </Text>
-                  <Text style={styles.calcHint}>*Calculated at base rate of ₹120/MT/month</Text>
+                  <Text style={styles.calcHint}>{t('*Calculated at base rate of ₹120/MT/month')}</Text>
                 </View>
               )}
 
@@ -349,7 +356,7 @@ export default function WarehouseScreen() {
                 onPress={submitBooking}
                 style={[styles.submitButton, { backgroundColor: roleColor }]}
               >
-                <Text style={styles.submitButtonText}>Confirm and Book</Text>
+                <Text style={styles.submitButtonText}>{t('Confirm and Book')}</Text>
               </TouchableOpacity>
             </View>
           </View>

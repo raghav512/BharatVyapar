@@ -20,8 +20,10 @@ import ReceivedOffersModal from './Marketplace/components/ReceivedOffersModal';
 import { w, h, f } from '../../../utils/responsive';
 import { getOffers, getReceivedOffers } from '../../../service/buy/buyCommodityService';
 import { getSellCommodities } from '../../../service/sell/sellCommodity';
+import { getMySubmittedQuotes, getReceivedQuotesOnRequirements } from '../../../service/trade/deal.service';
 import { showAlert } from '../../../components/CustomAlertBox';
 import { getFriendlyErrorMessage } from '../../../utils/errorUtils';
+import { useTranslation } from '../../../hook/useTranslation';
 
 const ROLE_THEMES = {
   FPO:       { primary: COLORS.fpoPrimary,       secondary: COLORS.fpoSecondary,       light: COLORS.fpoLight,       text: COLORS.fpoText },
@@ -57,14 +59,14 @@ const LISTING_STATUS_CONFIG = {
   cancelled: { label: 'CANCELLED', color: '#E53E3E', bg: '#FFF5F5', icon: 'close-circle' },
 };
 
-function formatRelative(dateStr) {
+function formatRelative(dateStr, t) {
   if (!dateStr) return '';
   const diff = Date.now() - new Date(dateStr).getTime();
   const h_ = Math.floor(diff / 3600000);
-  if (h_ < 1) return 'Just now';
-  if (h_ < 24) return `${h_}h ago`;
+  if (h_ < 1) return t ? t('Just now') : 'Just now';
+  if (h_ < 24) return t ? t('{hours}h ago').replace('{hours}', String(h_)) : `${h_}h ago`;
   const d = Math.floor(h_ / 24);
-  return `${d}d ago`;
+  return t ? t('{days}d ago').replace('{days}', String(d)) : `${d}d ago`;
 }
 
 function normalizeStatus(st) {
@@ -72,14 +74,14 @@ function normalizeStatus(st) {
   return st.toLowerCase().replace(/\s+/g, '_');
 }
 
-function formatExpiry(expiresAt) {
+function formatExpiry(expiresAt, t) {
   if (!expiresAt) return null;
   const diff = Math.max(0, new Date(expiresAt) - Date.now());
-  if (diff === 0) return 'Expired';
+  if (diff === 0) return t ? t('Expired') : 'Expired';
   const h_ = Math.floor(diff / 3600000);
   const m = Math.floor((diff % 3600000) / 60000);
-  if (h_ > 0) return `Expires in ${h_}h ${m}m`;
-  return `Expires in ${m}m`;
+  if (h_ > 0) return t ? t('Expires in {hours}h {mins}m').replace('{hours}', String(h_)).replace('{mins}', String(m)) : `Expires in ${h_}h ${m}m`;
+  return t ? t('Expires in {mins}m').replace('{mins}', String(m)) : `Expires in ${m}m`;
 }
 
 const TAB_FILTERS = ['All', 'Active', 'In Negotiation', 'Accepted', 'Closed'];
@@ -145,6 +147,7 @@ function tradesReducer(state, action) {
 }
 
 export default function TradesScreen({ navigation }) {
+  const { t } = useTranslation();
   // PERFORMANCE FIX: Two granular selectors — TradesScreen only re-renders
   // when user or selectedRole change (not profileLoading, sendOtpError, etc.).
   const user      = useSelector(selectUser);
@@ -194,33 +197,35 @@ export default function TradesScreen({ navigation }) {
         else           dispatch({ type: 'FETCH_START' });
       }
 
-      const [resOffers, resSell] = await Promise.all([
+      // Services now return normalized arrays directly — no more response guessing
+      const [offersListRaw, sellList, myQuotes, receivedQuotes] = await Promise.all([
         getOffers({ page: 1, limit: 50 }, { signal: controller.signal }),
-        getSellCommodities({ sellerId: user?._id || user?.id }, { signal: controller.signal }),
+        getSellCommodities({ sellerId: user?.id || user?._id }, { signal: controller.signal }),
+        getMySubmittedQuotes(user?.id || user?._id),
+        getReceivedQuotesOnRequirements(user?.id || user?._id),
       ]);
+      
+      const offersList = [...(offersListRaw || []), ...(myQuotes || []), ...(receivedQuotes || [])];
 
       if (thisGeneration !== fetchGenerationRef.current) return;
       if (!isMountedRef.current) return;
 
-      const offersList = resOffers?.data?.offers || resOffers?.offers || [];
-      const sellList = resSell?.data?.commodities || (Array.isArray(resSell?.data) ? resSell.data : null) || resSell?.commodities || resSell?.docs || (Array.isArray(resSell) ? resSell : []);
-
-      const soldListings = sellList.filter(l => (l.status || '').toLowerCase() === 'sold');
-      
+      // Enrich sold listings with their accepted deal ID
+      const soldListings = sellList.filter(l => l.status === 'sold');
       let enrichedSellListings = sellList;
+
       if (soldListings.length > 0) {
         enrichedSellListings = await Promise.all(
           sellList.map(async (listing) => {
-            if ((listing.status || '').toLowerCase() !== 'sold') return listing;
+            if (listing.status !== 'sold') return listing;
             try {
-              const res = await getReceivedOffers(listing._id || listing.id, { signal: controller.signal });
+              // getReceivedOffers returns normalized offer[] — use offer.id, offer.dealId directly
+              const offers = await getReceivedOffers(listing.id, { signal: controller.signal });
               if (thisGeneration !== fetchGenerationRef.current) return listing;
-              const allOffers = res?.data?.offers || res?.offers || [];
-              const acceptedOffer = allOffers.find(o => (o.status || '').toLowerCase() === 'accepted');
+              const acceptedOffer = offers.find(o => o.status === 'accepted');
               return {
                 ...listing,
-                _dealId: acceptedOffer?.dealId || acceptedOffer?.deal?.id || acceptedOffer?.deal?._id || null,
-                _deal:   acceptedOffer?.deal || null,
+                _dealId: acceptedOffer?.dealId || null,
                 _acceptedOffer: acceptedOffer || null,
               };
             } catch {
@@ -358,7 +363,7 @@ export default function TradesScreen({ navigation }) {
       const qty       = offer.quantity || 0;
       const commodity = offer.commodity ||
                         (typeof offer.commodityId === 'object' ? offer.commodityId : null) || {};
-      const expiry    = formatExpiry(offer.expiresAt);
+      const expiry    = formatExpiry(offer.expiresAt, t);
       const escrowCfg = offer.deal ? (ESCROW_STATUS_CONFIG[offer.deal.escrowStatus] || ESCROW_STATUS_CONFIG.pending_payment) : null;
       const maxRounds = offer.maxNegotiationRounds || commodity?.maxNegotiationRounds || 5;
       const isNegotiable = offer.isNegotiable !== false &&
@@ -366,7 +371,14 @@ export default function TradesScreen({ navigation }) {
 
       const isDeletedListing = !commodity.commodityName && !commodity.name;
       
-      const accessibilityLabel = `Buy offer for ${commodity.commodityName || 'commodity'}${commodity.type ? ` variety ${commodity.type}` : ''}. Status: ${statusCfg.label}. Your offer price: ₹${offer.price} per ${offer.priceUnit || 'Qt'}. Quantity: ${qty} ${offer.unit || 'Ton'}.`;
+      const accessibilityLabel = t('Buy offer for {commodity}{variety}. Status: {status}. Your offer price: ₹{price} per {priceUnit}. Quantity: {qty} {unit}.')
+        .replace('{commodity}', commodity.commodityName || t('commodity'))
+        .replace('{variety}', commodity.type ? t(' variety {type}').replace('{type}', commodity.type) : '')
+        .replace('{status}', t(statusCfg.label))
+        .replace('{price}', String(offer.price))
+        .replace('{priceUnit}', offer.priceUnit || 'Qt')
+        .replace('{qty}', String(qty))
+        .replace('{unit}', offer.unit || 'Ton');
 
       const ctaBgColor = isDeletedListing ? '#FFF5F5' : isMyTurn && !isTerminal ? theme.primary + '10' : '#F8F9FA';
 
@@ -377,11 +389,11 @@ export default function TradesScreen({ navigation }) {
             styles.offerCard,
             isMyTurn && !isTerminal && styles.myTurnCard,
             ['in_negotiation', 'negotiating'].includes(displaySt) && !isTerminal && styles.activeNegotiationCard,
-            isDeletedListing && { opacity: 0.6, borderColor: COLORS.error, borderWidth: 1 }
+            isDeletedListing && styles.deletedListingCard,
           ]}
           onPress={() => {
             if (isDeletedListing) {
-              showAlert({ type: 'error', title: 'Listing Removed', message: 'The seller has deleted this commodity listing. This negotiation is no longer active.' });
+              showAlert({ type: 'error', title: t('Listing Removed'), message: t('The seller has deleted this commodity listing. This negotiation is no longer active.') });
               return;
             }
             handleOfferPress(offer);
@@ -390,27 +402,27 @@ export default function TradesScreen({ navigation }) {
           accessible={true}
           accessibilityRole="button"
           accessibilityLabel={accessibilityLabel}
-          accessibilityHint={isMyTurn ? "Your turn to respond. Double tap to reply to counter offer." : "Double tap to view negotiation thread details."}
+          accessibilityHint={isMyTurn ? t('Your turn to respond. Double tap to reply to counter offer.') : t('Double tap to view negotiation thread details.')}
         >
           {isMyTurn && !isTerminal && (
             <View style={[styles.yourTurnBanner, { backgroundColor: theme.primary }]}>
               <Icon name="flash" size={13} color={COLORS.white} />
-              <Text style={styles.yourTurnText}>Your Turn — Respond Now</Text>
+              <Text style={styles.yourTurnText}>{t('Your Turn — Respond Now')}</Text>
             </View>
           )}
 
           <View style={styles.cardHeader}>
-            <View style={{ flex: 1 }}>
+            <View style={styles.cardFlex}>
               {isDeletedListing ? (
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: w(4) }}>
+                <View style={styles.deletedListingHeader}>
                   <Icon name="cancel" size={14} color={COLORS.error} />
                   <Text style={[styles.cropTitle, { color: COLORS.error }]}>
-                    Listing Removed by Seller
+                    {t('Listing Removed by Seller')}
                   </Text>
                 </View>
               ) : (
                 <Text style={styles.cropTitle}>
-                  {commodity.commodityName || commodity.name || 'Commodity'}
+                  {commodity.commodityName || commodity.name || t('Commodity')}
                   {commodity.type ? ` (${commodity.type})` : ''}
                 </Text>
               )}
@@ -423,25 +435,25 @@ export default function TradesScreen({ navigation }) {
             </View>
             <View style={[styles.statusBadge, { backgroundColor: statusCfg.bg }]}>
               <Icon name={statusCfg.icon} size={12} color={statusCfg.color} />
-              <Text style={[styles.statusText, { color: statusCfg.color }]}>{statusCfg.label}</Text>
+              <Text style={[styles.statusText, { color: statusCfg.color }]}>{t(statusCfg.label)}</Text>
             </View>
           </View>
 
           <View style={styles.priceStrip}>
             <View style={styles.priceItem}>
-              <Text style={styles.priceLabel}>Your Offer</Text>
+              <Text style={styles.priceLabel}>{t('Your Offer')}</Text>
               <Text style={[styles.priceVal, { color: theme.primary }]}>₹{offer.price}/{offer.priceUnit || 'Qt'}</Text>
             </View>
             <View style={styles.priceDivider} />
             <View style={styles.priceItem}>
-              <Text style={styles.priceLabel}>Latest Price</Text>
+              <Text style={styles.priceLabel}>{t('Latest Price')}</Text>
               <Text style={[styles.priceVal, { color: lastPrice !== offer.price ? '#DD6B20' : COLORS.text }]}>
                 ₹{lastPrice}/{offer.priceUnit || 'Qt'}
               </Text>
             </View>
             <View style={styles.priceDivider} />
             <View style={styles.priceItem}>
-              <Text style={styles.priceLabel}>Quantity</Text>
+              <Text style={styles.priceLabel}>{t('Quantity')}</Text>
               <Text style={styles.priceVal}>{qty} {offer.unit || 'Ton'}</Text>
             </View>
           </View>
@@ -450,7 +462,7 @@ export default function TradesScreen({ navigation }) {
             {isNegotiable && offer.roundCount != null && (
               <View style={styles.metaChip}>
                 <Icon name="refresh-circle" size={12} color={COLORS.textMuted} />
-                <Text style={styles.metaChipText}>Round {offer.roundCount}/{maxRounds}</Text>
+                <Text style={styles.metaChipText}>{t('Round {current}/{max}').replace('{current}', String(offer.roundCount)).replace('{max}', String(maxRounds))}</Text>
               </View>
             )}
             {expiry && !isTerminal && (
@@ -461,7 +473,7 @@ export default function TradesScreen({ navigation }) {
             )}
             <View style={styles.metaChip}>
               <Icon name="clock-outline" size={12} color={COLORS.textMuted} />
-              <Text style={styles.metaChipText}>{formatRelative(offer.createdAt)}</Text>
+              <Text style={styles.metaChipText}>{formatRelative(offer.createdAt, t)}</Text>
             </View>
             {commodity.paymentTimeline && (
               <View style={styles.metaChip}>
@@ -472,7 +484,7 @@ export default function TradesScreen({ navigation }) {
             {commodity.escrowEnabled && (
               <View style={[styles.metaChip, { borderColor: '#9AE6B4', backgroundColor: '#F0FFF4' }]}>
                 <Icon name="shield-check" size={12} color="#38A169" />
-                <Text style={[styles.metaChipText, { color: '#38A169' }]}>Escrow Secured</Text>
+                <Text style={[styles.metaChipText, { color: '#38A169' }]}>{t('Escrow Secured')}</Text>
               </View>
             )}
           </View>
@@ -481,7 +493,7 @@ export default function TradesScreen({ navigation }) {
             <View style={styles.dealBlock}>
               <View style={styles.dealHeader}>
                 <Icon name={escrowCfg.icon} size={14} color={escrowCfg.color} />
-                <Text style={[styles.dealStatus, { color: escrowCfg.color }]}>{escrowCfg.label}</Text>
+                <Text style={[styles.dealStatus, { color: escrowCfg.color }]}>{t(escrowCfg.label)}</Text>
               </View>
               <View style={styles.progressTrack}>
                 <View style={[styles.progressBar, { width: `${escrowCfg.progress * 100}%`, backgroundColor: escrowCfg.color }]} />
@@ -502,16 +514,16 @@ export default function TradesScreen({ navigation }) {
               }
               size={14}
               color={isDeletedListing ? COLORS.error : isMyTurn && !isTerminal ? theme.primary : COLORS.textMuted}
-              style={{ marginRight: w(4) }}
+              style={styles.ctaIconMargin}
             />
             <Text style={[styles.ctaText, { color: isDeletedListing ? COLORS.error : isMyTurn && !isTerminal ? theme.primary : COLORS.textMuted }]}>
               {isDeletedListing
-                ? 'Item no longer available'
+                ? t('Item no longer available')
                 : offer.status === 'accepted'
-                ? 'View Escrow Deal'
+                ? t('View Escrow Deal')
                 : isMyTurn
-                ? 'Respond to Counter'
-                : 'View Negotiation Thread'}
+                ? t('Respond to Counter')
+                : t('View Negotiation Thread')}
             </Text>
             {!isDeletedListing && (
               <Icon name="chevron-right" size={16} color={isMyTurn && !isTerminal ? theme.primary : COLORS.textMuted} />
@@ -548,7 +560,7 @@ export default function TradesScreen({ navigation }) {
       const buyerObj  = acceptedOffer?.buyerId || acceptedOffer?.buyer || {};
       const buyerName = buyerObj.firstName
         ? `${buyerObj.firstName} ${buyerObj.lastName || ''}`.trim()
-        : buyerObj.name || 'Buyer';
+        : buyerObj.name || t('Buyer');
 
       const handlePress = () => {
         if (isSold) {
@@ -563,31 +575,38 @@ export default function TradesScreen({ navigation }) {
         }
       };
 
-      const accessibilityLabel = `Sell listing for ${crop}${variety ? ` variety ${variety}` : ''}. Status: ${statusCfg.label}. Price: ₹${price} per ${priceUnit}. Quantity: ${quantity}. Trade basis: ${normalizedTradeType}.`;
+      const accessibilityLabel = t('Sell listing for {crop}{variety}. Status: {status}. Price: ₹{price} per {priceUnit}. Quantity: {quantity}. Trade basis: {tradeType}.')
+        .replace('{crop}', crop)
+        .replace('{variety}', variety ? t(' variety {type}').replace('{type}', variety) : '')
+        .replace('{status}', t(statusCfg.label))
+        .replace('{price}', price)
+        .replace('{priceUnit}', priceUnit)
+        .replace('{quantity}', quantity)
+        .replace('{tradeType}', normalizedTradeType);
 
       return (
         <TouchableOpacity
           key={id}
           style={[
             styles.offerCard,
-            isSold && { borderLeftWidth: 4, borderLeftColor: '#6B46C1', borderColor: '#E9D8FD' },
+            isSold && styles.soldListingCard,
           ]}
           onPress={handlePress}
           activeOpacity={0.85}
           accessible={true}
           accessibilityRole="button"
           accessibilityLabel={accessibilityLabel}
-          accessibilityHint={isSold ? "Deal closed. Double tap to view escrow deal details." : "Listing active. Double tap to view received buyer offers."}
+          accessibilityHint={isSold ? t('Deal closed. Double tap to view escrow deal details.') : t('Listing active. Double tap to view received buyer offers.')}
         >
           {isSold && (
             <View style={[styles.yourTurnBanner, { backgroundColor: '#6B46C1' }]}>
               <Icon name="check-decagram" size={13} color={COLORS.white} />
-              <Text style={styles.yourTurnText}>Deal Closed — View Escrow Progress</Text>
+              <Text style={styles.yourTurnText}>{t('Deal Closed — View Escrow Progress')}</Text>
             </View>
           )}
 
           <View style={styles.cardHeader}>
-            <View style={{ flex: 1 }}>
+            <View style={styles.cardFlex}>
               <Text style={styles.cropTitle}>
                 {crop}{variety ? ` (${variety})` : ''}
               </Text>
@@ -598,32 +617,32 @@ export default function TradesScreen({ navigation }) {
             </View>
             <View style={[styles.statusBadge, { backgroundColor: statusCfg.bg }]}>
               <Icon name={statusCfg.icon} size={12} color={statusCfg.color} />
-              <Text style={[styles.statusText, { color: statusCfg.color }]}>{statusCfg.label}</Text>
+              <Text style={[styles.statusText, { color: statusCfg.color }]}>{t(statusCfg.label)}</Text>
             </View>
           </View>
 
           <View style={styles.priceStrip}>
             <View style={styles.priceItem}>
-              <Text style={styles.priceLabel}>Price / {priceUnit}</Text>
+              <Text style={styles.priceLabel}>{t('Price / {unit}').replace('{unit}', priceUnit)}</Text>
               <Text style={[styles.priceVal, { color: theme.primary }]}>₹{price}</Text>
             </View>
             <View style={styles.priceDivider} />
             <View style={styles.priceItem}>
-              <Text style={styles.priceLabel}>Quantity</Text>
+              <Text style={styles.priceLabel}>{t('Quantity')}</Text>
               <Text style={styles.priceVal}>{quantity}</Text>
             </View>
             <View style={styles.priceDivider} />
             <View style={styles.priceItem}>
-              <Text style={styles.priceLabel}>Trade Basis</Text>
+              <Text style={styles.priceLabel}>{t('Trade Basis')}</Text>
               <Text style={styles.priceVal}>{normalizedTradeType}</Text>
             </View>
           </View>
 
           {isSold && buyerObj.firstName && (
-            <View style={[styles.metaRow, { paddingHorizontal: w(14) }]}>
+            <View style={styles.buyerMetaRowSold}>
               <View style={[styles.metaChip, { borderColor: '#C3DAFE', backgroundColor: '#EBF4FF' }]}>
                 <Icon name="account-check" size={12} color="#3182CE" />
-                <Text style={[styles.metaChipText, { color: '#3182CE' }]}>Buyer: {buyerName}</Text>
+                <Text style={[styles.metaChipText, { color: '#3182CE' }]}>{t('Buyer: {name}').replace('{name}', buyerName)}</Text>
               </View>
             </View>
           )}
@@ -633,18 +652,18 @@ export default function TradesScreen({ navigation }) {
               {isActive && (isNegotiableListing ? (
                 <View style={[styles.metaChip, { borderColor: theme.primary + '30', backgroundColor: theme.primary + '08' }]}>
                   <Icon name="handshake-outline" size={12} color={theme.primary} />
-                  <Text style={[styles.metaChipText, { color: theme.primary }]}>Negotiation ON</Text>
+                  <Text style={[styles.metaChipText, { color: theme.primary }]}>{t('Negotiation ON')}</Text>
                 </View>
               ) : (
                 <View style={[styles.metaChip, { borderColor: '#E2E8F0', backgroundColor: '#F8FAFC' }]}>
                   <Icon name="lock-outline" size={12} color={COLORS.textMuted} />
-                  <Text style={styles.metaChipText}>Fixed Price</Text>
+                  <Text style={styles.metaChipText}>{t('Fixed Price')}</Text>
                 </View>
               ))}
               {listing.escrowEnabled && (
                 <View style={[styles.metaChip, { borderColor: '#9AE6B4', backgroundColor: '#F0FFF4' }]}>
                   <Icon name="shield-check" size={12} color="#38A169" />
-                  <Text style={[styles.metaChipText, { color: '#38A169' }]}>Escrow Secured</Text>
+                  <Text style={[styles.metaChipText, { color: '#38A169' }]}>{t('Escrow Secured')}</Text>
                 </View>
               )}
             </View>
@@ -654,7 +673,7 @@ export default function TradesScreen({ navigation }) {
             <View style={styles.dealBlock}>
               <View style={styles.dealHeader}>
                 <Icon name={escrowCfg.icon} size={14} color={escrowCfg.color} />
-                <Text style={[styles.dealStatus, { color: escrowCfg.color }]}>{escrowCfg.label}</Text>
+                <Text style={[styles.dealStatus, { color: escrowCfg.color }]}>{t(escrowCfg.label)}</Text>
               </View>
               <View style={styles.progressTrack}>
                 <View style={[styles.progressBar, { width: `${escrowCfg.progress * 100}%`, backgroundColor: escrowCfg.color }]} />
@@ -673,21 +692,23 @@ export default function TradesScreen({ navigation }) {
               }
               size={14}
               color={isSold ? '#6B46C1' : theme.primary}
-              style={{ marginRight: w(4) }}
+              style={styles.ctaIconMargin}
             />
             <Text style={[styles.ctaText, { color: isSold ? '#6B46C1' : theme.primary }]}>
               {isSold
-                ? 'View Escrow Deal Details'
+                ? t('View Escrow Deal Details')
                 : isActive
-                ? 'View Received Buyer Offers'
-                : 'View Offer History'}
+                ? t('View Received Buyer Offers')
+                : t('View Offer History')}
             </Text>
             <Icon name="chevron-right" size={16} color={isSold ? '#6B46C1' : theme.primary} />
           </View>
         </TouchableOpacity>
       );
     }
-  }, [tradeMode, theme, handleOfferPress, navigation]);
+  }, [tradeMode, theme, handleOfferPress, navigation, t]);
+
+  const handleRefresh = useCallback(() => loadData(true), [loadData]);
 
   const flatListStyle = useMemo(() => ({
     backgroundColor: theme.light,
@@ -701,17 +722,17 @@ export default function TradesScreen({ navigation }) {
     return (
       <View>
         {apiError && (
-          <View style={styles.errorBanner} accessible={true} accessibilityLabel={`Error: ${apiError}`}>
+          <View style={styles.errorBanner} accessible={true} accessibilityLabel={t('Error: {msg}').replace('{msg}', t(apiError))}>
             <Icon name="alert-circle-outline" size={15} color={COLORS.white} />
-            <Text style={styles.errorBannerText}>{apiError}</Text>
+            <Text style={styles.errorBannerText}>{t(apiError)}</Text>
             <TouchableOpacity
               onPress={() => loadData(true)}
               style={styles.retryBadge}
               accessible={true}
               accessibilityRole="button"
-              accessibilityLabel="Retry loading data"
+              accessibilityLabel={t('Retry loading data')}
             >
-              <Text style={styles.retryBadgeText}>Retry</Text>
+              <Text style={styles.retryBadgeText}>{t('Retry')}</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -723,11 +744,11 @@ export default function TradesScreen({ navigation }) {
             activeOpacity={0.7}
             accessible={true}
             accessibilityRole="button"
-            accessibilityLabel="My Offers (Buying)"
+            accessibilityLabel={t('My Offers (Buying)')}
             accessibilityState={{ selected: tradeMode === 'buy' }}
           >
             <Text style={[styles.switcherText, tradeMode === 'buy' && styles.switcherTextActive]}>
-              My Offers (Buying)
+              {t('My Offers (Buying)')}
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -736,11 +757,11 @@ export default function TradesScreen({ navigation }) {
             activeOpacity={0.7}
             accessible={true}
             accessibilityRole="button"
-            accessibilityLabel="My Listings (Selling)"
+            accessibilityLabel={t('My Listings (Selling)')}
             accessibilityState={{ selected: tradeMode === 'sell' }}
           >
             <Text style={[styles.switcherText, tradeMode === 'sell' && styles.switcherTextActive]}>
-              My Listings (Selling)
+              {t('My Listings (Selling)')}
             </Text>
           </TouchableOpacity>
         </View>
@@ -764,12 +785,12 @@ export default function TradesScreen({ navigation }) {
                       onPress={() => dispatch({ type: 'SET_TAB', tab })}
                       accessible={true}
                       accessibilityRole="button"
-                      accessibilityLabel={`${tab} filter`}
+                      accessibilityLabel={t('{tab} filter').replace('{tab}', t(tab))}
                       accessibilityState={{ selected: isActive }}
-                      accessibilityHint={inNegBadge ? "Counter offer received from seller. Tapping filters list to items awaiting your response." : `Filters offers to show ${tab}`}
+                      accessibilityHint={inNegBadge ? t('Counter offer received from seller. Tapping filters list to items awaiting your response.') : t('Filters offers to show {tab}').replace('{tab}', t(tab))}
                     >
                       <Text style={[styles.tabChipText, isActive && { color: COLORS.white }]}>
-                        {tab}
+                        {t(tab)}
                       </Text>
                       {inNegBadge && (
                         <Icon name="circle" size={8} color={COLORS.error} />
@@ -790,11 +811,11 @@ export default function TradesScreen({ navigation }) {
                       onPress={() => dispatch({ type: 'SET_CROP', crop })}
                       accessible={true}
                       accessibilityRole="button"
-                      accessibilityLabel={`${crop} crop filter`}
+                      accessibilityLabel={crop === 'All' ? t('All crop filter') : t('{crop} crop filter').replace('{crop}', crop)}
                       accessibilityState={{ selected: selectedCrop === crop }}
                     >
                       <Text style={[styles.cropChipText, selectedCrop === crop && { color: theme.primary, fontWeight: '700' }]}>
-                        {crop}
+                        {crop === 'All' ? t('All') : crop}
                       </Text>
                     </TouchableOpacity>
                   ))}
@@ -806,13 +827,17 @@ export default function TradesScreen({ navigation }) {
 
         <Text style={[styles.countLabel, { color: theme.primary, marginHorizontal: w(16), marginTop: h(12) }]} accessibilityLiveRegion="polite">
           {tradeMode === 'buy'
-            ? `${filteredOffers.length} offer${filteredOffers.length !== 1 ? 's' : ''}`
-            : `${sellListings.length} active listing${sellListings.length !== 1 ? 's' : ''} for sale`
+            ? (filteredOffers.length === 1
+                ? t('1 offer')
+                : t('{count} offers').replace('{count}', String(filteredOffers.length)))
+            : (sellListings.length === 1
+                ? t('1 active listing for sale')
+                : t('{count} active listings for sale').replace('{count}', String(sellListings.length)))
           }
         </Text>
       </View>
     );
-  }, [apiError, tradeMode, activeTab, selectedCrop, cropChips, filteredOffers.length, sellListings.length, uniqueOffers, theme, loadData]);
+  }, [apiError, tradeMode, activeTab, selectedCrop, cropChips, filteredOffers.length, sellListings.length, uniqueOffers, theme, loadData, t]);
 
   const listEmpty = useMemo(() => {
     if (apiError) return null;
@@ -823,19 +848,19 @@ export default function TradesScreen({ navigation }) {
           {backendCrash ? (
             <>
               <Icon name="package-variant-closed-remove" size={80} color="#E53E3E" style={{ opacity: 0.8 }} />
-              <Text style={styles.emptyTitle}>Listings Removed</Text>
+              <Text style={styles.emptyTitle}>{t('Listings Removed')}</Text>
               <Text style={styles.emptyText}>
-                The seller has permanently removed this commodity from the marketplace.
+                {t('The seller has permanently removed this commodity from the marketplace.')}
               </Text>
             </>
           ) : (
             <>
               <Icon name="handshake-outline" size={56} color={COLORS.textMuted} />
-              <Text style={styles.emptyTitle}>No Offers Found</Text>
+              <Text style={styles.emptyTitle}>{t('No Offers Found')}</Text>
               <Text style={styles.emptyText}>
                 {activeTab === 'All'
-                  ? "You haven't submitted any offers yet.\nBrowse the marketplace to find commodities."
-                  : `No offers with "${activeTab}" status.`}
+                  ? t("You haven't submitted any offers yet.\nBrowse the marketplace to find commodities.")
+                  : t('No offers with "{status}" status.').replace('{status}', t(activeTab))}
               </Text>
             </>
           )}
@@ -845,11 +870,11 @@ export default function TradesScreen({ navigation }) {
               onPress={() => navigation.navigate('Market')}
               accessible={true}
               accessibilityRole="button"
-              accessibilityLabel="Browse Marketplace"
-              accessibilityHint="Navigate to browse commodities marketplace screen"
+              accessibilityLabel={t('Browse Marketplace')}
+              accessibilityHint={t('Navigate to browse commodities marketplace screen')}
             >
               <Icon name="store-outline" size={16} color={COLORS.white} />
-              <Text style={styles.browseBtnText}>Browse Marketplace</Text>
+              <Text style={styles.browseBtnText}>{t('Browse Marketplace')}</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -859,25 +884,25 @@ export default function TradesScreen({ navigation }) {
       return (
         <View style={styles.emptyState} accessible={true}>
           <Icon name="store-outline" size={56} color={COLORS.textMuted} />
-          <Text style={styles.emptyTitle}>No Active Listings</Text>
+          <Text style={styles.emptyTitle}>{t('No Active Listings')}</Text>
           <Text style={styles.emptyText}>
-            You haven't listed any crops for sale in the marketplace yet.
+            {t("You haven't listed any crops for sale in the marketplace yet.")}
           </Text>
           <TouchableOpacity
             style={[styles.browseBtn, { backgroundColor: theme.primary }]}
             onPress={() => navigation.navigate('Sell')}
             accessible={true}
             accessibilityRole="button"
-            accessibilityLabel="Create Sell Offer"
-            accessibilityHint="Navigate to list a new crop for sale"
+            accessibilityLabel={t('Create Sell Offer')}
+            accessibilityHint={t('Navigate to list a new crop for sale')}
           >
             <Icon name="plus-circle-outline" size={16} color={COLORS.white} />
-            <Text style={styles.browseBtnText}>Create Sell Offer</Text>
+            <Text style={styles.browseBtnText}>{t('Create Sell Offer')}</Text>
           </TouchableOpacity>
         </View>
       );
     }
-  }, [apiError, tradeMode, filteredOffers.length, sellListings.length, backendCrash, activeTab, theme.primary, navigation]);
+  }, [apiError, tradeMode, filteredOffers.length, sellListings.length, backendCrash, activeTab, theme.primary, navigation, t]);
 
   const keyExtractor = useCallback((item, index) => {
     return item?.id || item?._id || String(index);
@@ -888,13 +913,13 @@ export default function TradesScreen({ navigation }) {
       <SafeScreen style={{ backgroundColor: theme.light }} top={false} bottom={false}>
         <AppHeader
           backgroundColor={theme.primary}
-          title="My Trades"
-          subtitle="Your offers, negotiations & deals"
+          title={t('My Trades')}
+          subtitle={t('Your offers, negotiations & deals')}
           showBackButton={false}
         />
         <View style={styles.centeredContainer} accessible={true}>
           <ActivityIndicator size="large" color={theme.primary} />
-          <Text style={styles.loadingText}>Loading your trades...</Text>
+          <Text style={styles.loadingText}>{t('Loading your trades...')}</Text>
         </View>
       </SafeScreen>
     );
@@ -904,8 +929,8 @@ export default function TradesScreen({ navigation }) {
     <SafeScreen style={flatListStyle} top={false} bottom={false}>
       <AppHeader
         backgroundColor={theme.primary}
-        title="My Trades"
-        subtitle="Your offers, negotiations & deals"
+        title={t('My Trades')}
+        subtitle={t('Your offers, negotiations & deals')}
         showBackButton={false}
       />
 
@@ -919,7 +944,7 @@ export default function TradesScreen({ navigation }) {
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={() => loadData(true)}
+            onRefresh={handleRefresh}
             colors={[theme.primary]}
             tintColor={theme.primary}
           />
@@ -1256,5 +1281,31 @@ const styles = StyleSheet.create({
   cropChipText: {
     fontSize: f(11),
     color: COLORS.textMuted,
+  },
+  // Interned helpers — prevent new JSObject allocation every renderItem call
+  cardFlex: {
+    flex: 1,
+  },
+  deletedListingCard: {
+    opacity: 0.6,
+    borderColor: COLORS.error,
+    borderWidth: 1,
+  },
+  deletedListingHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: w(4),
+  },
+  soldListingCard: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#6B46C1',
+    borderColor: '#E9D8FD',
+  },
+  buyerMetaRowSold: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: w(6),
+    paddingHorizontal: w(14),
+    marginBottom: h(10),
   },
 });

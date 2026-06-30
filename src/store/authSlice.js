@@ -10,6 +10,7 @@ import {
 import authApi from '../service/auth/authApi';
 import userApi from '../service/user/userApi';
 import COLORS from '../constant/colors';
+import { normalizeUser, mergeWithLocalProfile } from '../service/normalizers/user.normalizer';
 
 // THUNK: App start pe disk check
 export const checkStoredToken = createAsyncThunk(
@@ -18,13 +19,8 @@ export const checkStoredToken = createAsyncThunk(
     try {
       const session = await getStoredAuthSession();
       if (session?.user) {
-        const user = session.user;
-        if (user.shopname !== undefined && user.shopName === undefined) {
-          user.shopName = user.shopname;
-        }
-        if (user.email !== undefined && user.emailId === undefined) {
-          user.emailId = user.email;
-        }
+        // normalizeUser trims to 14 clean fields + fixes shopname/email inconsistencies
+        session.user = normalizeUser(session.user);
       }
       return session;
     } catch (err) {
@@ -64,22 +60,11 @@ export const verifyOtp = createAsyncThunk(
           Corporate: COLORS.corporatePrimary,
         }[role] || COLORS.fpoSecondary;
 
-        let user = response.user || response.data || null;
-        if (user) {
-          const localProfile = await getLocalProfile(mobile);
-          ['shopName', 'shopname', 'emailId', 'email', 'firstName', 'lastName', 'gender', 'village', 'district', 'state'].forEach(key => {
-            if (!user[key] && localProfile[key]) {
-              user[key] = localProfile[key];
-            }
-          });
-
-          if (user.shopname !== undefined && user.shopName === undefined) {
-            user.shopName = user.shopname;
-          }
-          if (user.email !== undefined && user.emailId === undefined) {
-            user.emailId = user.email;
-          }
-        }
+        const rawUser = response.user || response.data || null;
+        // mergeWithLocalProfile: fills missing fields from local cache, then normalizes
+        // Result: clean 14-field object, shopname/email fixed, 30+ extra keys stripped
+        const localProfile = rawUser?.phone ? await getLocalProfile(rawUser.phone || mobile) : null;
+        const user = mergeWithLocalProfile(rawUser, localProfile);
 
         const normalizedSession = {
           token: response.token,
@@ -104,38 +89,27 @@ export const getUserDetails = createAsyncThunk(
   'auth/getUserDetails',
   async (_, { rejectWithValue, getState }) => {
     try {
-      console.log('📥 [GET USER] Fetching user details...');
       const response = await userApi.getUserDetails();
-      let user = response?.data?.user || response?.data || null;
-      if (user) {
-        const stateUser = getState().auth.user;
-        const phone = user.phone || stateUser?.phone;
-        if (phone) {
-          const localProfile = await getLocalProfile(phone);
-          ['shopName', 'shopname', 'emailId', 'email', 'firstName', 'lastName', 'gender', 'village', 'district', 'state'].forEach(key => {
-            if (!user[key] && localProfile[key]) {
-              user[key] = localProfile[key];
-            }
-          });
-        }
+      const rawUser = response?.data?.user || response?.data || null;
 
-        if (user.shopname !== undefined && user.shopName === undefined) {
-          user.shopName = user.shopname;
-        }
-        if (user.email !== undefined && user.emailId === undefined) {
-          user.emailId = user.email;
-        }
+      const stateUser = getState().auth.user;
+      const phone = rawUser?.phone || stateUser?.phone;
+      const localProfile = phone ? await getLocalProfile(phone) : null;
+
+      // mergeWithLocalProfile fills missing fields, normalizeUser trims to 14 fields
+      const user = mergeWithLocalProfile(rawUser, localProfile);
+
+      if (__DEV__) {
+        console.log('✅ [GET USER]', {
+          name: `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || 'N/A',
+          phone: user?.phone || 'N/A',
+          role: user?.role || 'N/A',
+        });
       }
-      console.log('✅ [GET USER] Success:', {
-        name: `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || 'N/A',
-        phone: user?.phone || 'N/A',
-        role: user?.role || 'N/A',
-        shopName: user?.shopName,
-        emailId: user?.emailId,
-      });
+
       return user;
     } catch (err) {
-      console.error('❌ [GET USER] Failed:', err?.message);
+      if (__DEV__) console.error('❌ [GET USER] Failed:', err?.message);
       return rejectWithValue(err?.message || 'Failed to fetch user details');
     }
   },
@@ -146,31 +120,16 @@ export const updateProfile = createAsyncThunk(
   async ({ formData, clientUpdatedUser, type }, { rejectWithValue, getState, signal }) => {
     try {
       const currentUser = getState().auth.user || {};
-      console.log('📤 [UPDATE PROFILE] Updating profile...');
-      console.log('📝 [UPDATE PROFILE] Current data:', {
-        firstName: currentUser.firstName,
-        lastName: currentUser.lastName,
-        gender: currentUser.gender,
-        emailId: currentUser.emailId,
-        shopName: currentUser.shopName,
-      });
 
       const response = await userApi.updateProfile(formData, type, signal);
-      console.log('🔍 [UPDATE PROFILE] Backend response:', response);
-      console.log('🔍 [UPDATE PROFILE] Backend response.data:', response?.data);
-
       const backendUser = response?.data || null;
-      if (backendUser) {
-        if (backendUser.shopname !== undefined && backendUser.shopName === undefined) {
-          backendUser.shopName = backendUser.shopname;
-        }
-        if (backendUser.email !== undefined && backendUser.emailId === undefined) {
-          backendUser.emailId = backendUser.email;
-        }
-      }
-      const mergedUser = { ...currentUser, ...backendUser, ...clientUpdatedUser };
 
-      if (mergedUser.phone) {
+      // Merge order: currentUser (base) → backendUser (server truth) → clientUpdatedUser (optimistic)
+      // normalizeUser trims to 14 fields + fixes shopname/email — no manual patching needed
+      const rawMerged = { ...currentUser, ...backendUser, ...clientUpdatedUser };
+      const mergedUser = normalizeUser(rawMerged);
+
+      if (mergedUser?.phone) {
         await saveLocalProfile(mergedUser.phone, mergedUser);
       }
 
@@ -182,7 +141,6 @@ export const updateProfile = createAsyncThunk(
       try {
         const session = await getStoredAuthSession();
         const authState = getState().auth;
-        console.log('💾 [PERSIST USER] Saving session to storage...');
         await saveAuthSession({
           token: authState.token,
           user: mergedUser,
@@ -191,29 +149,25 @@ export const updateProfile = createAsyncThunk(
           roleColor: authState.roleColor,
         });
       } catch (persistErr) {
-        console.error('❌ [PERSIST USER] Failed:', persistErr);
+        if (__DEV__) console.error('❌ [PERSIST USER] Failed:', persistErr);
       }
 
-      console.log('✅ [UPDATE PROFILE] Updated successfully');
-      console.log('📝 [UPDATE PROFILE] New data:', {
-        firstName: mergedUser.firstName,
-        lastName: mergedUser.lastName,
-        gender: mergedUser.gender,
-        emailId: mergedUser.emailId,
-        shopName: mergedUser.shopName,
-        village: mergedUser.village,
-        district: mergedUser.district,
-        state: mergedUser.state,
-      });
+      if (__DEV__) {
+        console.log('✅ [UPDATE PROFILE]', {
+          firstName: mergedUser?.firstName,
+          lastName: mergedUser?.lastName,
+          shopName: mergedUser?.shopName,
+          emailId: mergedUser?.emailId,
+        });
+      }
 
       return mergedUser;
     } catch (err) {
       if (err?.name === 'CanceledError' || err?.name === 'AbortError' || err?.code === 'ERR_CANCELED' || axios.isCancel(err)) {
-        console.log('🚫 [UPDATE PROFILE] Cancelled by user');
+        if (__DEV__) console.log('🚫 [UPDATE PROFILE] Cancelled by user');
         return rejectWithValue({ cancelled: true });
       }
-      console.error('❌ [UPDATE PROFILE] Failed:', err?.message);
-      console.error('❌ [UPDATE PROFILE] Full backend error:', JSON.stringify(err?.backendError ?? err, null, 2));
+      if (__DEV__) console.error('❌ [UPDATE PROFILE] Failed:', err?.message);
       return rejectWithValue(err?.message || 'Failed to update profile');
     }
   },

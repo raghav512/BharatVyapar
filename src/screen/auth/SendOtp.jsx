@@ -17,9 +17,11 @@ import { sendOtp } from '../../store/authSlice';
 import { useAuth } from '../../hook/useAuth';
 import COLORS from '../../constant/colors';
 import { w, h, mw, f } from '../../utils/responsive';
+import { useTranslation } from '../../hook/useTranslation';
 
 export default function SendOtp({ route, navigation }) {
   const dispatch = useDispatch();
+  const { t } = useTranslation();
   const selectedRole = route?.params?.selectedRole || 'FPO';
   const roleColor = route?.params?.roleColor || COLORS.fpoSecondary;
 
@@ -56,11 +58,11 @@ export default function SendOtp({ route, navigation }) {
 
   const handleLoginWithOtp = async () => {
     if (mobile.length !== 10) {
-      setFormError('Please enter a valid 10-digit mobile number.');
+      setFormError(t('Please enter a valid 10-digit mobile number.'));
       return;
     }
     if (!selectedRole) {
-      setFormError('Please select a role.');
+      setFormError(t('Please select a role.'));
       return;
     }
 
@@ -82,7 +84,7 @@ export default function SendOtp({ route, navigation }) {
     const action = await dispatch(sendOtp({ mobile, role: selectedRole }));
 
     if (sendOtp.rejected.match(action)) {
-      setFormError(action.payload || 'Unable to send OTP. Please try again.');
+      setFormError(t(action.payload || 'Unable to send OTP. Please try again.'));
       return;
     }
 
@@ -136,11 +138,11 @@ export default function SendOtp({ route, navigation }) {
                   allowFontScaling={false}
                   numberOfLines={1}
                 >
-                  {selectedRole}
+                  {t(selectedRole)}
                 </Text>
               </View>
-              <Text style={styles.appName}>Bharat FPO Vyapar</Text>
-              <Text style={styles.tagline}>Aapka Business, Aapki Tarakki</Text>
+              <Text style={styles.appName}>{t('Bharat FPO Vyapar')}</Text>
+              <Text style={styles.tagline}>{t('Aapka Business, Aapki Tarakki')}</Text>
             </View>
 
             {/* Card */}
@@ -152,13 +154,13 @@ export default function SendOtp({ route, navigation }) {
                     { backgroundColor: roleColor + '20', color: roleColor },
                   ]}
                 >
-                  {selectedRole}
+                  {t(selectedRole)}
                 </Text>
               </View>
 
-              <Text style={styles.cardTitle}>Enter Mobile Number</Text>
+              <Text style={styles.cardTitle}>{t('Enter Mobile Number')}</Text>
               <Text style={styles.cardSubtitle}>
-                We'll send an OTP to verify your number
+                {t("We'll send an OTP to verify your number")}
               </Text>
 
               {/* Phone input */}
@@ -171,7 +173,7 @@ export default function SendOtp({ route, navigation }) {
                 </View>
                 <TextInput
                   style={styles.input}
-                  placeholder="Mobile number"
+                  placeholder={t('Mobile number')}
                   placeholderTextColor={COLORS.textMuted}
                   keyboardType="numeric"
                   maxLength={10}
@@ -199,7 +201,9 @@ export default function SendOtp({ route, navigation }) {
                   ]}
                 />
               </View>
-              <Text style={styles.progressHint}>{mobile.length}/10 digits</Text>
+              <Text style={styles.progressHint}>
+                {t('{length}/10 digits').replace('{length}', String(mobile.length))}
+              </Text>
 
               {/* Error */}
               {!!formError && (
@@ -226,12 +230,12 @@ export default function SendOtp({ route, navigation }) {
                 {sendOtpLoading ? (
                   <ActivityIndicator color={COLORS.white} />
                 ) : (
-                  <Text style={styles.btnText}>Send OTP</Text>
+                  <Text style={styles.btnText}>{t('Send OTP')}</Text>
                 )}
               </TouchableOpacity>
             </Animated.View>
             <Text style={styles.footerNote}>
-              By continuing, you agree to our Terms & Privacy Policy
+              {t('By continuing, you agree to our Terms & Privacy Policy')}
             </Text>
           </View>
         </Animated.View>
