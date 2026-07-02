@@ -246,7 +246,8 @@ export function normalizeOffer(raw) {
   // ── Buyer resolution ──
   const buyerObj  = (raw.buyerId  && typeof raw.buyerId  === 'object') ? raw.buyerId  :
                     (raw.buyer    && typeof raw.buyer    === 'object') ? raw.buyer    : null;
-  const buyerId   = buyerObj ? extractId(buyerObj) : extractId(raw.buyerId || raw.buyer);
+  const buyerIdStr = buyerObj ? extractId(buyerObj) : extractId(raw.buyerId || raw.buyer);
+  const buyerId   = buyerObj ? { ...buyerObj, _id: buyerIdStr, id: buyerIdStr } : buyerIdStr;
 
   const buyerFullName = buildUserName(buyerObj);
   const shopName      = buyerObj?.shopName || buyerObj?.shopname || '';
@@ -258,7 +259,8 @@ export function normalizeOffer(raw) {
   // ── Seller resolution ──
   const sellerObj = (raw.sellerId && typeof raw.sellerId === 'object') ? raw.sellerId :
                     (raw.seller   && typeof raw.seller   === 'object') ? raw.seller   : null;
-  const sellerId  = sellerObj ? extractId(sellerObj) : extractId(raw.sellerId || raw.seller);
+  const sellerIdStr = sellerObj ? extractId(sellerObj) : extractId(raw.sellerId || raw.seller);
+  const sellerId  = sellerObj ? { ...sellerObj, _id: sellerIdStr, id: sellerIdStr } : sellerIdStr;
 
   // ── Commodity resolution ──
   const commObj      = (raw.commodityId && typeof raw.commodityId === 'object') ? raw.commodityId :
@@ -266,14 +268,32 @@ export function normalizeOffer(raw) {
   const commodityId  = commObj ? extractId(commObj) : extractId(raw.commodityId || raw.commodity);
 
   // ── Negotiation rounds ──
-  const rounds = normalizeRounds(raw, buyerId);
+  const rounds = normalizeRounds(raw, buyerIdStr);
+
+  // Resolve currentTurn using fallback logic similar to NegotiationDetailsScreen if missing from backend
+  let resolvedTurn = raw.currentTurn || raw.current_turn || null;
+  if (!resolvedTurn) {
+    if (rounds.length === 0) {
+      resolvedTurn = 'seller';
+    } else {
+      const lastRound = rounds[rounds.length - 1];
+      const lastSender = lastRound.proposedBy || lastRound.role;
+      if (lastSender === 'buyer') {
+        resolvedTurn = 'seller';
+      } else if (lastSender === 'seller') {
+        resolvedTurn = 'buyer';
+      } else {
+        resolvedTurn = 'seller';
+      }
+    }
+  }
 
   return {
     id:            String(id),
     price:         Number(raw.price)    || 0,
     quantity:      Number(raw.quantity) || 0,
     status:        String(raw.status    || 'pending').toLowerCase(),
-    currentTurn:   raw.currentTurn      || raw.current_turn || 'buyer',
+    currentTurn:   resolvedTurn,
     roundCount:    raw.roundCount       ?? 0,
     maxRounds:     raw.maxNegotiationRounds ?? 5,
     tradeType:     raw.tradeType        || 'FOR',
@@ -299,6 +319,7 @@ export function normalizeOffer(raw) {
 
     // Commodity details (nested object resolved to support both new and legacy keys)
     commodity: commObj ? {
+      ...commObj,
       id:                    extractId(commObj),
       name:                  String(commObj.commodityName || commObj.name || '').trim() || '—',
       commodityName:         String(commObj.commodityName || commObj.name || '').trim() || '—',

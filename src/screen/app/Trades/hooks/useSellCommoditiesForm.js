@@ -34,13 +34,15 @@
  */
 
 import { useReducer, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useSelector } from 'react-redux';
+import { selectUser } from '../../../../store/authSelectors';
 import { launchImageLibrary } from 'react-native-image-picker';
 import { pick, types, isCancel } from '@react-native-documents/picker';
 import { showAlert } from '../../../../components/CustomAlertBox';
 import { getFriendlyErrorMessage } from '../../../../utils/errorUtils';
 import { submitSellListing } from '../../../../service/sell/sellService';
 
-export const IMAGE_MAX_SIZE_MB = 50;
+export const IMAGE_MAX_SIZE_MB = 5;
 export const UNIT_TO_PRICE_UNIT = { Ton: 'Ton', Quintal: 'Qt', Kg: 'Kg' };
 
 const INITIAL_STATE = {
@@ -102,6 +104,10 @@ export const useSellCommoditiesForm = ({ route, navigation }) => {
 
   const abortControllerRef = useRef(null);
   const isMountedRef       = useRef(true);
+
+  const user = useSelector(selectUser);
+  const userRef = useRef(user);
+  userRef.current = user;
 
   // ─── stateRef: always holds the latest state ─────────────────────────────────
   // Handlers that need to read state (e.g. handlePostListing, handleAddImages)
@@ -300,6 +306,30 @@ export const useSellCommoditiesForm = ({ route, navigation }) => {
     const currentState    = stateRef.current;
     const currentEditItem = editItemRef.current;
     const nav             = navigationRef.current;
+
+    // Check KYC status before submitting
+    if (userRef.current?.kycStatus !== 'VERIFIED') {
+      showAlert({
+        type: 'error',
+        title: 'KYC Required',
+        message: 'You must complete PAN verification before listing or selling commodities.',
+      });
+      return;
+    }
+
+    // Check image sizes
+    if (Array.isArray(currentState.commodityImages)) {
+      for (const img of currentState.commodityImages) {
+        if (img?.fileSize && img.fileSize > 5 * 1024 * 1024) {
+          showAlert({
+            type: 'error',
+            title: 'Image Too Large',
+            message: 'Image size cannot exceed 5MB.',
+          });
+          return;
+        }
+      }
+    }
 
     try {
       setSubmitting(true);

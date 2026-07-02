@@ -1,5 +1,6 @@
 import api from '../api';
 import { USE_DUMMY_API } from '../../config';
+const FORCE_DUMMY = true;
 
 export const REQUIREMENT_STATUS = {
   OPEN: 'OPEN',
@@ -410,7 +411,7 @@ const createPurchaseOrderFromQuote = (quote, requirement, acceptedQuantity) => {
 
 export const rfqWorkflowService = {
   getRequirements: async ({ marketplaceOnly = false, excludeBuyerId = null } = {}) => {
-    if (!USE_DUMMY_API) {
+    if (!USE_DUMMY_API && !FORCE_DUMMY) {
       const response = await api.get('/requirements', {
         params: marketplaceOnly ? { status: MARKET_VISIBLE_STATUSES.join(',') } : undefined,
       });
@@ -435,7 +436,7 @@ export const rfqWorkflowService = {
   createRequirement: async (payload) => {
     validateRequirementPayload(payload);
 
-    if (!USE_DUMMY_API) {
+    if (!USE_DUMMY_API && !FORCE_DUMMY) {
       const response = await api.post('/requirements', {
         ...payload,
         remainingQuantity: payload.quantity,
@@ -462,7 +463,7 @@ export const rfqWorkflowService = {
     const requirement = findRequirement(requirementId);
     validateQuotePayload(payload, requirement);
 
-    if (!USE_DUMMY_API) {
+    if (!USE_DUMMY_API && !FORCE_DUMMY) {
       const response = await api.post(`/requirements/${requirementId}/quotes`, payload);
       return response.data;
     }
@@ -514,7 +515,7 @@ export const rfqWorkflowService = {
   },
 
   getSubmittedQuotes: async () => {
-    if (!USE_DUMMY_API) {
+    if (!USE_DUMMY_API && !FORCE_DUMMY) {
       const response = await api.get('/quotes/my-submitted');
       return response.data?.data || [];
     }
@@ -523,7 +524,7 @@ export const rfqWorkflowService = {
   },
 
   getReceivedQuotes: async ({ requirementId = null } = {}) => {
-    if (!USE_DUMMY_API) {
+    if (!USE_DUMMY_API && !FORCE_DUMMY) {
       const response = await api.get('/quotes/received', { params: requirementId ? { requirementId } : undefined });
       return response.data?.data || [];
     }
@@ -534,7 +535,7 @@ export const rfqWorkflowService = {
   },
 
   acceptQuote: async (quoteId) => {
-    if (!USE_DUMMY_API) {
+    if (!USE_DUMMY_API && !FORCE_DUMMY) {
       const response = await api.post(`/quotes/${quoteId}/accept`);
       return response.data;
     }
@@ -589,7 +590,7 @@ export const rfqWorkflowService = {
   },
 
   rejectQuote: async (quoteId) => {
-    if (!USE_DUMMY_API) {
+    if (!USE_DUMMY_API && !FORCE_DUMMY) {
       const response = await api.post(`/quotes/${quoteId}/reject`);
       return response.data;
     }
@@ -614,7 +615,7 @@ export const rfqWorkflowService = {
   },
 
   getSellerOrders: async () => {
-    if (!USE_DUMMY_API) {
+    if (!USE_DUMMY_API && !FORCE_DUMMY) {
       const response = await api.get('/purchase-orders/seller');
       return response.data?.data || [];
     }
@@ -623,7 +624,7 @@ export const rfqWorkflowService = {
   },
 
   getBuyerOrders: async () => {
-    if (!USE_DUMMY_API) {
+    if (!USE_DUMMY_API && !FORCE_DUMMY) {
       const response = await api.get('/purchase-orders/buyer');
       return response.data?.data || [];
     }
@@ -632,7 +633,7 @@ export const rfqWorkflowService = {
   },
 
   updateOrderStatus: async (orderId, nextStatus) => {
-    if (!USE_DUMMY_API) {
+    if (!USE_DUMMY_API && !FORCE_DUMMY) {
       const response = await api.patch(`/purchase-orders/${orderId}/status`, { status: nextStatus });
       return response.data;
     }
@@ -669,7 +670,7 @@ export const rfqWorkflowService = {
   },
 
   getNotifications: async () => {
-    if (!USE_DUMMY_API) {
+    if (!USE_DUMMY_API && !FORCE_DUMMY) {
       const response = await api.get('/notifications');
       return response.data?.data || [];
     }

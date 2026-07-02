@@ -77,7 +77,8 @@ export default function ReceivedOffersModal({ visible, onClose, item }) {
   const [apiError, setApiError] = useState(null);
 
   const loadOffers = useCallback(async (isRefresh = false, isBackground = false) => {
-    if (!item?.id) {
+    const commodityId = item?._id || item?.id;
+    if (!commodityId) {
       setApiError(t('No commodity ID provided.'));
       if (!isBackground) setLoading(false);
       return;
@@ -90,7 +91,7 @@ export default function ReceivedOffersModal({ visible, onClose, item }) {
       setApiError(null);
 
       // getReceivedOffers now returns normalized offer[] — no guessing needed
-      const list = await getReceivedOffers(item.id);
+      const list = await getReceivedOffers(commodityId);
       setOffers(Array.isArray(list) ? list : []);
     } catch (err) {
       if (__DEV__) console.error('[ReceivedOffersModal] loadOffers error:', err);
@@ -103,17 +104,18 @@ export default function ReceivedOffersModal({ visible, onClose, item }) {
         setRefreshing(false);
       }
     }
-  }, [item?.id, t]);
+  }, [item?._id, item?.id, t]);
 
   useEffect(() => {
-    if (visible && item?.id) {
+    const commodityId = item?._id || item?.id;
+    if (visible && commodityId) {
       loadOffers();
       const intervalId = setInterval(() => {
         loadOffers(false, true);
       }, 300000);
       return () => clearInterval(intervalId);
     }
-  }, [visible, item?.id, loadOffers]);
+  }, [visible, item?._id, item?.id, loadOffers]);
 
   const handleOfferPress = useCallback((offer) => {
     onClose();

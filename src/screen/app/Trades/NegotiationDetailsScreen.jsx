@@ -28,6 +28,7 @@ import {
   acceptOffer,
   rejectOffer,
 } from '../../../service/buy/buyCommodityService';
+import { getSellCommodityById } from '../../../service/sell/sellCommodity';
 
 const ROLE_THEMES = {
   FPO: { primary: COLORS.fpoPrimary, secondary: COLORS.fpoSecondary, light: COLORS.fpoLight, text: COLORS.fpoText },
@@ -148,14 +149,9 @@ export default function NegotiationDetailsScreen({ route, navigation }) {
 
   const routeRole = route?.params?.role;
   const myRole = isMockMode ? mockRoleToggle : (
-    routeRole || 
-    (userId && sellerId && buyerId
-      ? (String(userId) === String(sellerId)
-        ? 'seller'
-        : (String(userId) === String(buyerId) ? 'buyer' : 'seller')
-      )
-      : (userId && buyerId && String(userId) === String(buyerId) ? 'buyer' : 'seller')
-    )
+    (userId && sellerId && String(userId) === String(sellerId)) ? 'seller' :
+    (userId && buyerId && String(userId) === String(buyerId)) ? 'buyer' :
+    (routeRole || 'buyer')
   );
 
   // Construct timeline rounds ensuring the initial offer round is present
@@ -216,12 +212,14 @@ export default function NegotiationDetailsScreen({ route, navigation }) {
   }, [offer, buyerId]);
 
   const isMyTurn = offer ? currentTurn === myRole : false;
-  const isFinalOfferFromServer = offer?.isFinalOffer === true || offer?.is_final_offer === true;
+  const lastRound = displayRounds[displayRounds.length - 1];
+  const isLastRoundFinal = lastRound?.isFinal === true;
+  const isFinalOfferFromServer = offer?.isFinalOffer === true || offer?.is_final_offer === true || isLastRoundFinal;
   const displayRoundCount = Math.max(1, (offer?.roundCount ?? offer?.round_count ?? displayRounds.length));
   // maxNegotiationRounds: use listing value if available; backend enforces default of 5
   const maxRounds = offer?.maxNegotiationRounds || offer?.commodityId?.maxNegotiationRounds || offer?.commodity?.maxNegotiationRounds || item?.maxNegotiationRounds || 5;
   const roundsMaxed = displayRoundCount >= maxRounds;
-  const isTerminal = ['accepted', 'rejected', 'expired'].includes(offer?.status);
+  const isTerminal = ['accepted', 'rejected', 'expired', 'cancelled', 'closed'].includes(offer?.status);
   
   // Check if negotiation rounds are allowed
   const resolvedCommodity = offer?.commodity || (typeof offer?.commodityId === 'object' ? offer?.commodityId : null) || item;
@@ -291,9 +289,21 @@ export default function NegotiationDetailsScreen({ route, navigation }) {
       const offerData = res?.data?.offer || res?.offer || res?.data || res;
       setOffer(offerData);
 
-      // Set item from embedded commodity if not passed via route
-      const resolvedCommodity = offerData?.commodity || (typeof offerData?.commodityId === 'object' ? offerData.commodityId : null);
-      if (resolvedCommodity && !routeItem) {
+      // Set item from embedded commodity and fetch full populated listing details (including sellerName, shopName and sellingPrice)
+      let resolvedCommodity = offerData?.commodity || (typeof offerData?.commodityId === 'object' ? offerData.commodityId : null);
+      const commId = resolvedCommodity?.id || resolvedCommodity?._id || offerData?.commodityId;
+      if (commId && typeof commId === 'string') {
+        try {
+          const fullCommodity = await getSellCommodityById(commId);
+          if (fullCommodity) {
+            resolvedCommodity = { ...resolvedCommodity, ...fullCommodity };
+          }
+        } catch (commErr) {
+          console.warn('[NegotiationDetailsScreen] Failed to fetch full commodity details:', commErr);
+        }
+      }
+
+      if (resolvedCommodity) {
         setItem(resolvedCommodity);
       }
 
@@ -389,7 +399,7 @@ export default function NegotiationDetailsScreen({ route, navigation }) {
             try {
               setSubmittingAction(true);
               const res = await acceptOffer(offerId);
-              const deal = res?.data?.deal || res?.deal;
+              const resolvedDealId = res?.dealId || res?.data?.deal?._id || res?.deal?._id || res?.data?.deal?.id || res?.deal?.id || res?.data?.dealId;
               showAlert({
                 type: 'success',
                 title: t('Deal Confirmed!'),
@@ -399,8 +409,7 @@ export default function NegotiationDetailsScreen({ route, navigation }) {
                     text: t('View Deal'),
                     onPress: () => {
                       navigation.navigate('DealDetails', {
-                        dealId: deal?.id || deal?._id,
-                        deal,
+                        dealId: resolvedDealId,
                         item,
                         role: myRole,
                       });
@@ -572,7 +581,9 @@ export default function NegotiationDetailsScreen({ route, navigation }) {
     ? `${buyerFirstName} ${buyerLastName}`.trim()
     : buyerObj.name || routeOffer?.buyerName || 'Buyer';
   const buyerShopName  = buyerObj.shopName || buyerObj.shopname || '';
-  const buyerName      = buyerShopName ? `${buyerFullName} (${buyerShopName})` : buyerFullName;
+  const rawBuyerName   = buyerShopName ? `${buyerFullName} (${buyerShopName})` : buyerFullName;
+  const buyerName      = (rawBuyerName && rawBuyerName !== '—' && rawBuyerName !== 'Buyer') ? rawBuyerName : t('Buyer');
+
   const sellerObj = offer?.sellerId || offer?.seller || offer?.commodityId?.sellerId || offer?.commodity?.sellerId || routeOffer?.sellerId || routeOffer?.seller || {};
   const sellerFirstName = typeof sellerObj === 'object' ? (sellerObj.firstName || '') : '';
   const sellerLastName  = typeof sellerObj === 'object' ? (sellerObj.lastName || '') : '';
@@ -580,7 +591,8 @@ export default function NegotiationDetailsScreen({ route, navigation }) {
     ? `${sellerFirstName} ${sellerLastName}`.trim()
     : (typeof sellerObj === 'object' ? sellerObj.name : '') || item?.sellerName || '—';
   const sellerShopName  = typeof sellerObj === 'object' ? (sellerObj.shopName || sellerObj.shopname || '') : '';
-  const sellerName      = sellerShopName ? `${sellerFullName} (${sellerShopName})` : sellerFullName;
+  const rawSellerName   = sellerShopName ? `${sellerFullName} (${sellerShopName})` : sellerFullName;
+  const sellerName      = (rawSellerName && rawSellerName !== '—' && rawSellerName !== 'Unknown Seller') ? rawSellerName : t('Seller');
   const renderedTimeline = React.useMemo(() => {
     if (displayRounds.length === 0) {
       return (
@@ -734,13 +746,16 @@ export default function NegotiationDetailsScreen({ route, navigation }) {
     );
   }
 
-  const lastRound = displayRounds[displayRounds.length - 1];
   const statusCfg = offer?.status === 'accepted'
     ? { label: 'Deal Closed', color: '#16a34a', bg: '#f0fdf4' }
     : offer?.status === 'rejected'
     ? { label: 'Rejected', color: '#dc2626', bg: '#fef2f2' }
     : offer?.status === 'expired'
     ? { label: 'Expired', color: '#6b7280', bg: '#f9fafb' }
+    : offer?.status === 'cancelled'
+    ? { label: 'Cancelled', color: '#6b7280', bg: '#f9fafb' }
+    : offer?.status === 'closed'
+    ? { label: 'Closed', color: '#6b7280', bg: '#f9fafb' }
     // Backend sends 'In Negotiation' (capital, spaced) — normalise both casings
     : (offer?.displayStatus === 'In Negotiation' || offer?.displayStatus === 'in_negotiation')
     ? { label: 'In Negotiation', color: '#6B46C1', bg: '#FAF5FF' }
@@ -956,7 +971,7 @@ export default function NegotiationDetailsScreen({ route, navigation }) {
           offer?.status === 'accepted' ? (
             <TouchableOpacity
               style={[styles.actionBtn, { backgroundColor: COLORS.success, flex: 1 }]}
-              onPress={() => navigation.navigate('DealDetails', { dealId: offer?.dealId, item, role: myRole })}
+              onPress={() => navigation.navigate('DealDetails', { dealId: offer?.dealId || offer?.id || offer?._id, item, role: myRole })}
             >
               <Icon name="handshake" size={18} color={COLORS.white} />
               <Text style={styles.acceptBtnText}>{t('View Escrow Deal')}</Text>
@@ -982,17 +997,19 @@ export default function NegotiationDetailsScreen({ route, navigation }) {
               </View>
             )}
             <View style={styles.buttonRow}>
-              {/* Decline: Only for seller, visible while negotiation is active */}
-              {myRole === 'seller' && (
+              {/* Decline: Visible when it is your turn and negotiation is active */}
+              {isMyTurn && (
                 <TouchableOpacity style={[styles.actionBtn, styles.rejectBtn]} onPress={handleReject}>
                   <Icon name="close-circle-outline" size={18} color={COLORS.error} />
                   <Text style={styles.rejectBtnText}>{t('Decline')}</Text>
                 </TouchableOpacity>
               )}
 
-              {/* Accept: Only for seller, when it's their turn and the last round was proposed by the buyer */}
-              {myRole === 'seller' && isMyTurn && lastRound && (
-                (lastRound.proposedBy === 'buyer' || lastRound.proposed_by === 'buyer' || lastRound.role === 'buyer')
+              {/* Accept: Visible when it's your turn and the last round was proposed by the other party */}
+              {isMyTurn && lastRound && (
+                lastRound.proposedBy !== myRole &&
+                lastRound.proposed_by !== myRole &&
+                lastRound.role !== myRole
               ) && (
                 <TouchableOpacity
                   style={[styles.actionBtn, { backgroundColor: theme.primary }]}

@@ -14,7 +14,7 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useSelector } from 'react-redux';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useFocusEffect } from '@react-navigation/native';
-import { selectResolvedRole } from '../../../../store/authSelectors';
+import { selectResolvedRole, selectUser } from '../../../../store/authSelectors';
 import { useTranslation } from '../../../../hook/useTranslation';
 import { SafeScreen } from '../../../../components/SafeScreen';
 import AppHeader from '../../../../components/AppHeader';
@@ -563,6 +563,10 @@ function MarketplaceScreenInner({ route, navigation }) {
   // PERFORMANCE FIX: Select resolvedRole and currentUserId granularly.
   // This prevents MarketplaceScreenInner from re-rendering on unrelated user object changes.
   const selectedRole = useSelector(selectResolvedRole);
+  const user = useSelector(selectUser);
+  const userRef = useRef(user);
+  userRef.current = user;
+
   const currentUserId = useSelector(state => {
     const raw = state.auth.user?._id || state.auth.user?.id;
     return raw ? String(raw).trim() : 'buyer_001';
@@ -841,7 +845,7 @@ function MarketplaceScreenInner({ route, navigation }) {
 
     try {
       const res = await getReceivedOffers(offer.id);
-      const allOffers = res?.data?.offers || res?.offers || [];
+      const allOffers = Array.isArray(res) ? res : res?.data?.offers || res?.offers || [];
       const TERMINAL = ['accepted', 'rejected', 'expired', 'sold', 'cancelled'];
       const activeNegotiations = allOffers.filter(o => {
         const st = (o.status || '').toLowerCase().replace(/\s+/g, '_');
@@ -887,7 +891,7 @@ function MarketplaceScreenInner({ route, navigation }) {
                 message: t('The listing has been removed from the marketplace.'),
               });
             } catch (err) {
-              const friendlyMsg = getFriendlyErrorMessage(err?.message || err);
+              const friendlyMsg = getFriendlyErrorMessage(err);
               showAlert({
                 type: 'error',
                 title: (err?.response?.status === 400 || err?.statusCode === 400) ? t('Cannot Delete') : t('Delete Failed'),
@@ -978,7 +982,17 @@ function MarketplaceScreenInner({ route, navigation }) {
           demand={item}
           theme={theme}
           t={t}
-          onFulfillPress={(demand) => setSelectedDemandForQuote(demand)}
+          onFulfillPress={(demand) => {
+            if (userRef.current?.kycStatus !== 'VERIFIED') {
+              showAlert({
+                type: 'error',
+                title: t('KYC Required'),
+                message: t('You must complete your PAN verification before quoting or fulfilling requirements.'),
+              });
+              return;
+            }
+            setSelectedDemandForQuote(demand);
+          }}
         />
       );
     }

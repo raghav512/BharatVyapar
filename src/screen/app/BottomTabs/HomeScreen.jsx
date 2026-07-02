@@ -72,11 +72,7 @@ const ROLE_CONFIGS = {
     ],
   },
   Trader: {
-    stats: [
-      { label: 'Purchased Stock', value: '3,400 MT', icon: 'warehouse' },
-      { label: 'Trade Finance', value: '₹45.0 L', icon: 'cash-multiple' },
-      { label: 'Active Bids', value: '12 Bids', icon: 'gavel' },
-    ],
+    stats: [],
     actions: [
       {
         name: 'Buy',
@@ -95,11 +91,7 @@ const ROLE_CONFIGS = {
     ],
   },
   Miller: {
-    stats: [
-      { label: 'Milling Stock', value: '2,100 MT', icon: 'warehouse' },
-      { label: 'Material Loans', value: '₹30.0 L', icon: 'cash-multiple' },
-      { label: 'Buy Indents', value: '4 Active', icon: 'clipboard-list' },
-    ],
+    stats: [],
     actions: [
       {
         name: 'Buy',
@@ -118,11 +110,7 @@ const ROLE_CONFIGS = {
     ],
   },
   Corporate: {
-    stats: [
-      { label: 'Bulk Inventory', value: '12,500 MT', icon: 'warehouse' },
-      { label: 'Corporate Credit', value: '₹1.2 Cr', icon: 'cash-multiple' },
-      { label: 'Open Tenders', value: '6 Bids', icon: 'file-document-outline' },
-    ],
+    stats: [],
     actions: [
       {
         name: 'Buy',
@@ -171,7 +159,7 @@ function HomeScreen({ navigation }) {
           setRequirements(mine);
         }
       } catch (e) {
-        console.error(e);
+        console.warn('[HomeScreen] Requirements endpoint not available:', e?.message || e);
       } finally {
         setLoadingRequirements(false);
       }

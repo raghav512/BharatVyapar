@@ -114,7 +114,7 @@ export default function CommodityDetailsScreen({ route, navigation }) {
       // Use _id first (MongoDB style), fallback to id
       const commodityId = item._id || item.id;
       const res = await getOffers({ commodityId });
-      const offersList = res?.data?.offers || res?.offers || [];
+      const offersList = Array.isArray(res) ? res : res?.data?.offers || res?.offers || [];
       
       // Find any active offer on this commodity — pending or in_negotiation (displayStatus)
       // Backend does not use 'countered' status; pending + In Negotiation displayStatus covers all active states
@@ -141,15 +141,17 @@ export default function CommodityDetailsScreen({ route, navigation }) {
   const handleCloseReceivedModal = useCallback(() => setReceivedOffersModalVisible(false), []);
   const handleGoBack            = useCallback(() => navigation.goBack(), [navigation]);
 
-  const isOwner = Boolean(user?._id && item?.sellerId && String(user._id) === String(item.sellerId));
+  const loggedInUserId = user?._id || user?.id;
+  const sellerIdToCheck = item?.sellerId || item?.seller?._id || item?.seller?.id || (typeof item?.seller === 'string' ? item?.seller : null);
+  const isOwner = Boolean(loggedInUserId && sellerIdToCheck && String(loggedInUserId) === String(sellerIdToCheck));
 
   useEffect(() => {
     const fetchReceivedOffersCount = async () => {
       if (!isOwner) return;
       try {
         setLoadingOffers(true);
-        const res = await getReceivedOffers(item.id);
-        const list = res?.data?.offers || res?.offers || [];
+        const res = await getReceivedOffers(item._id || item.id);
+        const list = Array.isArray(res) ? res : (res?.data?.offers || res?.offers || []);
         setOffersCount(list.length);
       } catch (err) {
         console.warn('[CommodityDetails] Failed to fetch received offers count:', err);
@@ -159,13 +161,14 @@ export default function CommodityDetailsScreen({ route, navigation }) {
       }
     };
 
-    if (item.id) {
+    const itemId = item._id || item.id;
+    if (itemId) {
       checkActiveOffer();
       setOfferPrice(String(item.sellingPrice || ''));
       setOfferQty(String(item.quantity || ''));
       fetchReceivedOffersCount();
     }
-  }, [item.id, checkActiveOffer, item.sellingPrice, item.quantity, isOwner]);
+  }, [item.id, item._id, checkActiveOffer, item.sellingPrice, item.quantity, isOwner]);
 
   const handlePlaceOffer = async () => {
     const finalPrice = item.isNegotiable === false ? item.sellingPrice : Number(offerPrice);
@@ -248,15 +251,21 @@ export default function CommodityDetailsScreen({ route, navigation }) {
     );
   }
 
-  const images = Array.isArray(item?.images || item?.commodityImages)
+  const fallbackUrl = 'https://placehold.net/default.png';
+
+  let images = Array.isArray(item?.images || item?.commodityImages)
     ? (item.images || item.commodityImages)
         .map(img => {
-          if (!img) return null;
-          if (typeof img === 'string') return img;
-          return img.url || img.uri || null;
+          if (!img) return fallbackUrl;
+          if (typeof img === 'string') return img.trim() === '' ? fallbackUrl : img;
+          return img.url || img.uri || fallbackUrl;
         })
         .filter(Boolean)
     : [];
+
+  if (images.length === 0) {
+    images = [fallbackUrl];
+  }
 
   const filteredParams = Array.isArray(item?.qualityParameters)
     ? item.qualityParameters.filter(param => {

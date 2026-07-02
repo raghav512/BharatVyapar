@@ -203,12 +203,9 @@ export default function TradesScreen({ navigation }) {
         getSellCommodities({ sellerId: user?.id || user?._id }, { signal: controller.signal }),
       ]);
 
-      // RFQ quotes (submitted by current user as seller against buyer demands)
-      const myQuotes = await getMySubmittedQuotes(user?.id || user?._id);
-
-      // Merge: buy-commodity offers + rfq submitted quotes, dedupe by id
+      // Merge: buy-commodity offers (dedupe by id)
       const seen = new Set();
-      const offersList = [...(offersListRaw || []), ...(myQuotes || [])].filter(o => {
+      const offersList = (offersListRaw || []).filter(o => {
         const key = o?.id || o?._id;
         if (!key || seen.has(key)) return false;
         seen.add(key);
@@ -233,7 +230,7 @@ export default function TradesScreen({ navigation }) {
               const acceptedOffer = offers.find(o => o.status === 'accepted');
               return {
                 ...listing,
-                _dealId: acceptedOffer?.dealId || null,
+                _dealId: acceptedOffer?.dealId || acceptedOffer?.id || null,
                 _acceptedOffer: acceptedOffer || null,
               };
             } catch {
@@ -316,11 +313,17 @@ export default function TradesScreen({ navigation }) {
   }, [offers]);
 
   const cropChips = useMemo(() => {
-    return ['All', ...Array.from(new Set(uniqueOffers.map(o => {
-      const commodity = o.commodity || (typeof o.commodityId === 'object' ? o.commodityId : null) || {};
-      return commodity.commodityName || commodity.name;
-    }).filter(Boolean)))];
-  }, [uniqueOffers]);
+    if (tradeMode === 'buy') {
+      return ['All', ...Array.from(new Set(uniqueOffers.map(o => {
+        const commodity = o.commodity || (typeof o.commodityId === 'object' ? o.commodityId : null) || {};
+        return commodity.commodityName || commodity.name;
+      }).filter(Boolean)))];
+    } else {
+      return ['All', ...Array.from(new Set(sellListings.map(l => {
+        return l.commodityName || l.name;
+      }).filter(Boolean)))];
+    }
+  }, [tradeMode, uniqueOffers, sellListings]);
 
   const filteredOffers = useMemo(() => {
     return uniqueOffers.filter(offer => {
@@ -340,8 +343,27 @@ export default function TradesScreen({ navigation }) {
     });
   }, [uniqueOffers, activeTab, selectedCrop]);
 
+  const filteredSellListings = useMemo(() => {
+    return sellListings.filter(listing => {
+      const st = (listing.status || 'active').toLowerCase();
+      
+      let tabMatch = true;
+      if (activeTab === 'Active') tabMatch = (st === 'active');
+      else if (activeTab === 'In Negotiation') {
+        tabMatch = (st === 'active' && listing.isNegotiable !== false);
+      }
+      else if (activeTab === 'Accepted') tabMatch = (st === 'sold');
+      else if (activeTab === 'Closed') tabMatch = ['expired', 'cancelled'].includes(st);
+      
+      const cropName = listing.commodityName || listing.name || '';
+      const cropMatch = selectedCrop === 'All' || cropName === selectedCrop;
+
+      return tabMatch && cropMatch;
+    });
+  }, [sellListings, activeTab, selectedCrop]);
+
   const handleOfferPress = useCallback((offer) => {
-    const resolvedDealId = offer.dealId || offer.deal?.id || offer.deal?._id;
+    const resolvedDealId = offer.dealId || offer.id || offer._id || offer.deal?.id || offer.deal?._id;
     const resolvedCommodity = offer.commodity || (typeof offer.commodityId === 'object' ? offer.commodityId : null) || {};
     if (offer.status === 'accepted' && resolvedDealId) {
       navigation.navigate('DealDetails', {
@@ -806,13 +828,13 @@ export default function TradesScreen({ navigation }) {
           )}
         </View>
 
-        {tradeMode === 'buy' && (
+        {true && (
           <>
             <View style={styles.tabBar}>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabBarContent} keyboardShouldPersistTaps="handled">
                 {TAB_FILTERS.map(tab => {
                   const isActive = tab === activeTab;
-                  const inNegBadge = tab === 'In Negotiation' &&
+                  const inNegBadge = tradeMode === 'buy' && tab === 'In Negotiation' &&
                     uniqueOffers.some(o => ['in_negotiation', 'negotiating', 'countered'].includes(normalizeStatus(o.displayStatus || o.status)) && o.currentTurn === 'buyer');
                   return (
                     <TouchableOpacity
@@ -830,7 +852,7 @@ export default function TradesScreen({ navigation }) {
                       accessibilityHint={inNegBadge ? t('Counter offer received from seller. Tapping filters list to items awaiting your response.') : t('Filters offers to show {tab}').replace('{tab}', t(tab))}
                     >
                       <Text style={[styles.tabChipText, isActive && { color: COLORS.white }]}>
-                        {t(tab)}
+                        {tab === 'Accepted' && tradeMode === 'sell' ? t('Sold') : t(tab)}
                       </Text>
                       {inNegBadge && (
                         <Icon name="circle" size={8} color={COLORS.error} />
@@ -870,14 +892,16 @@ export default function TradesScreen({ navigation }) {
             ? (filteredOffers.length === 1
                 ? t('1 offer')
                 : t('{count} offers').replace('{count}', String(filteredOffers.length)))
-            : (sellListings.length === 1
-                ? t('1 active listing for sale')
-                : t('{count} active listings for sale').replace('{count}', String(sellListings.length)))
+            : (filteredSellListings.length === 1
+                ? (activeTab === 'Active' ? t('1 active listing for sale') : t('1 listing'))
+                : (activeTab === 'Active'
+                    ? t('{count} active listings for sale').replace('{count}', String(filteredSellListings.length))
+                    : t('{count} listings').replace('{count}', String(filteredSellListings.length))))
           }
         </Text>
       </View>
     );
-  }, [apiError, tradeMode, activeTab, selectedCrop, cropChips, filteredOffers.length, sellListings.length, uniqueOffers, theme, loadData, navigation, t]);
+  }, [apiError, tradeMode, activeTab, selectedCrop, cropChips, filteredOffers.length, filteredSellListings.length, uniqueOffers, theme, loadData, navigation, t]);
 
   const listEmpty = useMemo(() => {
     if (apiError) return null;
@@ -920,7 +944,7 @@ export default function TradesScreen({ navigation }) {
         </View>
       );
     } else {
-      if (sellListings.length > 0) return null;
+      if (filteredSellListings.length > 0) return null;
       return (
         <View style={styles.emptyState} accessible={true}>
           <Icon name="store-outline" size={56} color={COLORS.textMuted} />
@@ -942,7 +966,7 @@ export default function TradesScreen({ navigation }) {
         </View>
       );
     }
-  }, [apiError, tradeMode, filteredOffers.length, sellListings.length, backendCrash, activeTab, theme.primary, navigation, t]);
+  }, [apiError, tradeMode, filteredOffers.length, filteredSellListings.length, backendCrash, activeTab, theme.primary, navigation, t]);
 
   const keyExtractor = useCallback((item, index) => {
     return item?.id || item?._id || String(index);
@@ -975,7 +999,7 @@ export default function TradesScreen({ navigation }) {
       />
 
       <FlatList
-        data={tradeMode === 'buy' ? filteredOffers : sellListings}
+        data={tradeMode === 'buy' ? filteredOffers : filteredSellListings}
         keyExtractor={keyExtractor}
         contentContainerStyle={flatListContentStyle}
         showsVerticalScrollIndicator={false}
